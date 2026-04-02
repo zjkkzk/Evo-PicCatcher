@@ -3,6 +3,14 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- 允许查询所有已安装应用，确保跨进程通信可见性 -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+        </intent>
+    </queries>
+
     <application
         android:name=".App"
         android:allowBackup="true"
@@ -21,6 +29,7 @@
             android:name="com.pic.catcher.provider.LogProvider"
             android:authorities="com.evo.piccatcher.logprovider"
             android:exported="true"
+            android:enabled="true"
             tools:ignore="ExportedContentProvider" />
 
         <meta-data

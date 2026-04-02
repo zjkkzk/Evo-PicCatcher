@@ -20,6 +20,7 @@ import com.pic.catcher.ui.config.PicFormat;
 import com.pic.catcher.util.FileUtils;
 import com.pic.catcher.util.Md5Util;
 import com.pic.catcher.util.PicUtil;
+import com.pic.catcher.util.XLog;
 import com.pic.catcher.util.http.HttpConnectUtil;
 
 import org.jetbrains.annotations.NotNull;
@@ -40,22 +41,11 @@ public class PicExportManager {
     private static final String BASE_PATH = "/storage/emulated/0/Android/data/com.evo.piccatcher/files";
 
     /**
-     * 跨进程安全日志：通过 ContentProvider 传输日志
+     * 统一日志入口
      */
     public void log(String msg) {
-        Log.i(TAG, msg);
-        AppExecutor.io().execute(() -> {
-            try {
-                Context context = AppUtil.getContext();
-                Bundle extras = new Bundle();
-                extras.putString(LogProvider.KEY_MSG, msg);
-                extras.putString(LogProvider.KEY_PKG, context.getPackageName());
-                context.getContentResolver().call(LogProvider.CONTENT_URI, LogProvider.METHOD_LOG, null, extras);
-            } catch (Exception e) {
-                // 如果 Provider 不可用，回退到 Logcat
-                Log.e(TAG, "LogProvider transport failed", e);
-            }
-        });
+        // XLog 内部已经处理了线程切换和跨进程调用逻辑
+        XLog.i(AppUtil.getContext(), msg);
     }
 
     public File getExportDir() {

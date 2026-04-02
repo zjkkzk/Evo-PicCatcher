@@ -64,11 +64,11 @@ android {
     compileSdk COMPILE_SDK_VERSION.toInteger()
 
     defaultConfig {
-        applicationId "com.pic.catcher"
+        applicationId "com.evo.piccatcher"
         minSdk 24
         targetSdk TARGET_SDK_VERSION.toInteger()
-        versionCode 37
-        versionName "v3.3.2-evo"
+        versionCode 41
+        versionName "v3.3.12-evo"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 

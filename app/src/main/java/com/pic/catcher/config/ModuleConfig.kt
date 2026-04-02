@@ -40,6 +40,13 @@ class ModuleConfig(var source: JSONObject) {
             source.put("minSpaceSize", value)
         }
 
+    var isSaveToInternal: Boolean = false
+        get() = JSONX.optBoolean(source, "isSaveToInternal", false)
+        set(value) {
+            field = value
+            source.put("isSaveToInternal", value)
+        }
+
     var picDefaultSaveFormat: String = "webp"
         get() = JSONX.optString(source, "picDefaultSaveFormat", "webp") ?: "webp"
         set(value) {
@@ -56,15 +63,33 @@ class ModuleConfig(var source: JSONObject) {
     }
 
     companion object {
+        private var cachedInstance: ModuleConfig? = null
+
         @JvmStatic
-        val instance: ModuleConfig by lazy {
-            load()
+        fun getInstance(): ModuleConfig {
+            val table = LocalKVUtil.getTable("module")
+            
+            // 安全检查：通过类名判断，避免在 UI 进程中因为找不到 XSharedPreferences 类而崩溃
+            if (table.javaClass.name.contains("XSharedPreferences")) {
+                try {
+                    // 反射调用 reload() 强制刷新配置
+                    table.javaClass.getMethod("reload").invoke(table)
+                } catch (e: Exception) {
+                    LogUtil.e("Reload config failed", e)
+                }
+                val moduleConfigStr = table.getString("module_config", "{}")
+                return ModuleConfig(moduleConfigStr.toJSONObject() ?: JSONObject())
+            }
+            
+            if (cachedInstance == null) {
+                cachedInstance = load()
+            }
+            return cachedInstance!!
         }
 
         @JvmStatic
         fun load(): ModuleConfig {
             val moduleConfig = LocalKVUtil.getTable("module").getString("module_config", "{}")
-            LogUtil.d("moduleConfig", moduleConfig)
             val json = moduleConfig.toJSONObject()
             return ModuleConfig(json ?: JSONObject())
         }
@@ -73,11 +98,12 @@ class ModuleConfig(var source: JSONObject) {
         fun save(moduleConfig: ModuleConfig) {
             val json = moduleConfig.toJson()
             LocalKVUtil.getTable("module").edit().putString("module_config", json).apply()
+            cachedInstance = moduleConfig
         }
 
         @JvmStatic
         fun isLessThanMinSize(length: Long): Boolean {
-            return length < instance.minSpaceSize * 1024L
+            return length < getInstance().minSpaceSize * 1024L
         }
 
     }

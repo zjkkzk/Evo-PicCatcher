@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.AdapterView.OnItemSelectedListener
 import android.widget.ArrayAdapter
+import android.widget.Toast
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -54,7 +55,8 @@ class ConfigActivity : BindingActivity<ActivityConfigBinding>() {
     }
 
     override fun initView() {
-        moduleConfig = ModuleConfig.instance
+        // 修复报错：改为调用 getInstance()
+        moduleConfig = ModuleConfig.getInstance()
         mConfigSourceText = moduleConfig.source.toString()
 
         // 沉浸式状态栏设置
@@ -89,19 +91,35 @@ class ConfigActivity : BindingActivity<ActivityConfigBinding>() {
                     SwitchItem(getString(R.string.config_catch_net_pic), moduleConfig.isCatchNetPic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchNetPic = checked
+                            showUpdatedToast()
                         }
                     },
                     SwitchItem(getString(R.string.config_catch_webview_pic), moduleConfig.isCatchWebViewPic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchWebViewPic = checked
+                            showUpdatedToast()
                         }
                     },
                     SwitchItem(getString(R.string.config_catch_glide_pic), moduleConfig.isCatchGlidePic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchGlidePic = checked
+                            showUpdatedToast()
                         }
                     },
-
+                    SwitchItem(
+                        getString(R.string.config_save_to_internal),
+                        moduleConfig.isSaveToInternal,
+                        if (moduleConfig.isSaveToInternal) getString(R.string.config_save_to_internal_on) else getString(R.string.config_save_to_internal_off)
+                    ).apply {
+                        addPropertyChangeListener {
+                            if ("checked" == it.propertyName) {
+                                moduleConfig.isSaveToInternal = checked
+                                desc = if (checked) getString(R.string.config_save_to_internal_on) else getString(R.string.config_save_to_internal_off)
+                                mAdapter.notifyDataSetChanged()
+                                showUpdatedToast()
+                            }
+                        }
+                    },
                     EditItem(
                         getString(R.string.config_min_space_size),
                         moduleConfig.minSpaceSize.toString(),
@@ -109,6 +127,7 @@ class ConfigActivity : BindingActivity<ActivityConfigBinding>() {
                     ).apply {
                         addPropertyChangeListener {
                             moduleConfig.minSpaceSize = value.toIntElse(0)
+                            showUpdatedToast()
                         }
                     },
                     SpinnerItem(
@@ -118,6 +137,7 @@ class ConfigActivity : BindingActivity<ActivityConfigBinding>() {
                     ).apply {
                         addPropertyChangeListener {
                             moduleConfig.picDefaultSaveFormat = picFormatList[selectedIndex]
+                            showUpdatedToast()
                         }
                     },
                 )
@@ -126,12 +146,14 @@ class ConfigActivity : BindingActivity<ActivityConfigBinding>() {
         mBinding.listView.adapter = mAdapter
     }
 
+    private fun showUpdatedToast() {
+        Toast.makeText(this, getString(R.string.toast_settings_updated), Toast.LENGTH_SHORT).show()
+        moduleConfig.save()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         moduleConfig.save()
-        if (!moduleConfig.toJson().equals(mConfigSourceText)) {
-            ToastUtil.showLong(this, getString(R.string.toast_plugin_config_change_tip))
-        }
     }
 
 
@@ -166,6 +188,14 @@ class ConfigActivity : BindingActivity<ActivityConfigBinding>() {
                 is SwitchItem -> {
                     val holder = vh.binding as ItemConfigSwitchBinding
                     holder.itemTitle.text = item.title
+                    
+                    if (item.desc != null) {
+                        holder.itemDesc.visibility = View.VISIBLE
+                        holder.itemDesc.text = item.desc
+                    } else {
+                        holder.itemDesc.visibility = View.GONE
+                    }
+
                     holder.itemSwitch.setOnCheckedChangeListener(null)
                     holder.itemSwitch.isChecked = item.checked
                     holder.itemSwitch.setOnCheckedChangeListener { _, isChecked ->

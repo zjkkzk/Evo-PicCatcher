@@ -7,15 +7,17 @@ import org.json.JSONObject
  * @date 2025/1/5 12:27
  * @description
  */
-class SwitchItem(title: CharSequence, checked: Boolean = false) : UiItem() {
+class SwitchItem(title: CharSequence, checked: Boolean = false, desc: CharSequence? = null) : UiItem() {
     var title: CharSequence by observableProperty(title, "title")
     var checked: Boolean by observableProperty(checked, "checked")
+    var desc: CharSequence? by observableProperty(desc, "desc")
 
 
     fun toJson(): JSONObject {
         return JSONObject().apply {
             put("title", title)
             put("checked", checked)
+            put("desc", desc)
         }
     }
 
@@ -23,7 +25,11 @@ class SwitchItem(title: CharSequence, checked: Boolean = false) : UiItem() {
         @JvmStatic
         fun fromJson(json: JSONObject?): SwitchItem? {
             if (json == null) return null
-            return SwitchItem(json.optString("title") ?: "", json.optBoolean("checked") ?: false)
+            return SwitchItem(
+                json.optString("title") ?: "",
+                json.optBoolean("checked") ?: false,
+                json.optString("desc")
+            )
         }
     }
 

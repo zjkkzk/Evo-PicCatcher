@@ -23,3 +23,8 @@ If you have any feature suggestions, feel free to open an Issue. Contributions a
 
 Some newly added code in this project is generated with the assistance of AI.  
 Please evaluate its reliability and security before use.
+
+## Privacy
+
+All image processing is performed locally on the device.  
+No data is collected or uploaded.

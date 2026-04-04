@@ -1,20 +1,25 @@
-# Evo-PicCatcher(图片捕手)
+[English](./README_EN.md)
 
-本项目是对[PicCatcher(图片捕手)](https://github.com/Mingyueyixi/PicCatcher)的修改
+# Evo-PicCatcher（图片捕手）
 
-## 介绍
+本项目基于 [PicCatcher（图片捕手）](https://github.com/Mingyueyixi/PicCatcher) 修改与扩展。
 
-抓取 app 运行中的图片
+## 项目介绍
 
-目前没什么新功能可以添加，如果有什么好的想法可以提交Issues,我会尽量实装的
+Evo-PicCatcher 是一个用于抓取应用运行过程中所显示图片的工具，适用于调试、分析与自动化等场景。
 
-## 新增功能(相较于原项目)
-使用Material Design 3规范重构UI
+如果有新的功能建议，欢迎提交 Issue，作者会根据情况进行实现。
 
-增加了更多的捕捉方式:ImageDecoder,Coil,Native
+## 相较原项目的改进
 
-可以选择将图片保存到app的Android/data下的私有目录(不会被相册app扫描到)
+- 使用 Material Design 3 规范重构用户界面  
+- 增加更多图片捕捉方式：
+  - ImageDecoder
+  - Coil
+  - Native  
+- 支持将图片保存至应用私有目录（Android/data），避免被系统相册扫描  
+- 新增日志功能，方便调试与问题定位  
 
-增添了日志功能
+## 注意
 
-## 注意!本项目新增代码均由AI生成!
+本项目的新增代码主要由 AI 辅助生成，请在使用前自行评估其稳定性与安全性。

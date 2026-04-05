@@ -1,6 +1,8 @@
 # Evo-PicCatcher
 
-This project is a modified and extended version of [PicCatcher](https://github.com/Mingyueyixi/PicCatcher).
+Repo:[Evo-PicCatcher](https://github.com/Evo-creative/Evo-PicCatcher)
+
+This project is a modified and extended version of `https://github.com/Mingyueyixi/PicCatcher`
 
 ## Introduction
 

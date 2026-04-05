@@ -2,8 +2,10 @@ package com.pic.catcher.ui
 
 import android.content.Intent
 import android.os.Bundle
-import android.os.Environment
+import android.view.View
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import com.google.android.material.color.DynamicColors
 import com.pic.catcher.R
@@ -30,6 +32,13 @@ class MainActivity : BaseActivity() {
         binding = LayoutMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // 监听窗口 Insets，实现输入法弹出时隐藏导航栏
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, insets ->
+            val imeVisible = insets.isVisible(WindowInsetsCompat.Type.ime())
+            binding.bottomNavigation.visibility = if (imeVisible) View.GONE else View.VISIBLE
+            insets
+        }
+
         binding.bottomNavigation.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.nav_settings -> {
@@ -48,7 +57,7 @@ class MainActivity : BaseActivity() {
             }
         }
 
-        // 默认选中中间的首页
+        // 默认选中中间 of 首页
         binding.bottomNavigation.selectedItemId = R.id.nav_home
 
         ViewModelProviders.from(this).get(AppUpdateViewModel::class.java).checkOnEnter(this)

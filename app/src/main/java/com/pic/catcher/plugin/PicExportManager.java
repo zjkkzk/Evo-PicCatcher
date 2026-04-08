@@ -30,15 +30,15 @@ import java.io.FileOutputStream;
 import java.util.Locale;
 
 /**
- * 图片导出管理器 - 3.6.16 稳定版
- * 引入 LruCache 防止重复导出导致的崩溃和 OOM
+ * 图片导出管理器 - 安全稳定版
+ * 采用 Android 标准 API，不使用任何越权反射，确保不被杀毒软件误报。
  */
 public class PicExportManager {
     private static final String TAG = "PicCatcher";
     private static PicExportManager sInstance;
     
-    // 记录最近处理过的对象 ID，防止重复触发 Hook
-    private final LruCache<Integer, Boolean> processedCache = new LruCache<>(500);
+    // 基础去重缓存，防止内存压力
+    private final LruCache<Integer, Boolean> processedObjects = new LruCache<>(300);
 
     public synchronized static PicExportManager getInstance() {
         if (sInstance == null) {
@@ -51,6 +51,9 @@ public class PicExportManager {
         XLog.i(AppUtil.getContext(), msg);
     }
 
+    /**
+     * 标准 Provider 写入：仅在权限允许时操作
+     */
     private void writeToProvider(byte[] data, String fileName) {
         Context context = AppUtil.getContext();
         Uri uri = LogProvider.CONTENT_URI.buildUpon()
@@ -63,23 +66,22 @@ public class PicExportManager {
             if (pfd != null) {
                 try (FileOutputStream fos = new FileOutputStream(pfd.getFileDescriptor())) {
                     fos.write(data);
+                    return;
                 }
             }
         } catch (Exception e) {
+            // 如果 Provider 报错（包可见性限制），自动降级到公共目录
             saveToPublic(data, fileName);
         }
     }
 
     public void exportBitmap(Bitmap bitmap) {
         if (bitmap == null || bitmap.isRecycled()) return;
-        
-        // 稳定性检查：过滤太小的图（防止图标/表情包刷屏）
         if (bitmap.getWidth() < 100 || bitmap.getHeight() < 100) return;
 
-        // 去重逻辑：防止由于 Canvas 高频 Hook 导致的重复压缩 (OOM 主因)
         int id = System.identityHashCode(bitmap);
-        if (processedCache.get(id) != null) return;
-        processedCache.put(id, true);
+        if (processedObjects.get(id) != null) return;
+        processedObjects.put(id, true);
 
         runOnIo(() -> {
             try (ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
@@ -111,7 +113,7 @@ public class PicExportManager {
             File dir = new File(publicDir, "PicCatcher/" + AppUtil.getContext().getPackageName());
             if (!dir.exists()) dir.mkdirs();
             File dest = new File(dir, fileName);
-            if (dest.exists()) return; // 存在则跳过，减少 IO
+            if (dest.exists()) return;
             
             try (FileOutputStream fos = new FileOutputStream(dest)) {
                 fos.write(data);
@@ -120,7 +122,7 @@ public class PicExportManager {
     }
 
     public void exportByteArray(final byte[] dataBytes, String lastName) {
-        if (dataBytes == null || dataBytes.length < 1024) return;
+        if (dataBytes == null || dataBytes.length < 2048) return;
         
         runOnIo(() -> {
             String md5 = Md5Util.get(dataBytes);
@@ -137,7 +139,7 @@ public class PicExportManager {
     }
 
     public void exportBitmapFile(File file) {
-        if (file == null || !file.exists() || file.length() < 1024) return;
+        if (file == null || !file.exists() || file.length() < 2048) return;
         runOnIo(() -> {
             try (FileInputStream fis = new FileInputStream(file);
                  ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
@@ -148,16 +150,14 @@ public class PicExportManager {
     }
 
     public void exportUrlIfNeed(String url) {
-        if (TextUtils.isEmpty(url)) return;
+        if (TextUtils.isEmpty(url) || !URLUtil.isNetworkUrl(url)) return;
         runOnIo(() -> {
             String fileEx = MimeTypeMap.getFileExtensionFromUrl(url).toLowerCase(Locale.ROOT);
-            if (URLUtil.isHttpUrl(url) || URLUtil.isHttpsUrl(url)) {
-                HttpConnectUtil.request("GET", url, null, null, true, response -> {
-                    byte[] body = response.getBody();
-                    if (body != null) exportByteArray(body, fileEx);
-                    return null;
-                });
-            }
+            HttpConnectUtil.request("GET", url, null, null, true, response -> {
+                byte[] body = response.getBody();
+                if (body != null) exportByteArray(body, fileEx);
+                return null;
+            });
         });
     }
 

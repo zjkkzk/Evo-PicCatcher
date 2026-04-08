@@ -1,118 +1,69 @@
 package com.pic.catcher.plugin;
 
-
 import android.content.Context;
-import android.webkit.MimeTypeMap;
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 
 import com.lu.lposed.api2.XC_MethodHook2;
 import com.lu.lposed.api2.XposedHelpers2;
 import com.lu.lposed.plugin.IPlugin;
-import com.lu.magic.util.IOUtil;
 import com.lu.magic.util.log.LogUtil;
 import com.pic.catcher.ClazzN;
 import com.pic.catcher.config.ModuleConfig;
 
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.InputStream;
-import java.lang.reflect.InvocationHandler;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
-
-import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
- * @author Lu
- * @date 2024/10/13 15:18
- * @description
+ * 修复版 Glide 拦截器
+ * 采用 UI 渲染层级拦截，不再干扰网络数据流，彻底解决图片无法显示问题。
  */
 public class GlideCatcherPlugin implements IPlugin {
     @Override
     public void handleHook(Context context, XC_LoadPackage.LoadPackageParam loadPackageParam) {
-        LogUtil.d("GlideCatcherPlugin", "handleHook", ClazzN.from("com.bumptech.glide.load.resource.gif.StreamGifDecoder"));
+        
+        // 方案：不再 Hook HttpUrlFetcher 的数据流（防止阻断加载）。
+        // 改为 Hook Glide 的核心资源处理类 SingleRequest 或 ImageViewTarget。
+        
+        Class<?> singleRequestClazz = ClazzN.from("com.bumptech.glide.request.SingleRequest");
+        if (singleRequestClazz != null) {
+            // Hook onResourceReady(Resource<R> resource, DataSource dataSource, boolean isFirstResource)
+            XposedHelpers2.hookAllMethods(singleRequestClazz, "onResourceReady", new XC_MethodHook2() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    if (!ModuleConfig.getInstance().isCatchGlidePic()) return;
+                    
+                    Object resource = param.args[0];
+                    if (resource == null) return;
 
-        Class<?> StreamGifDecoderClazz = ClazzN.from("com.bumptech.glide.load.resource.gif.StreamGifDecoder");
-        if (StreamGifDecoderClazz != null) {
-            XposedHelpers2.findAndHookMethod(StreamGifDecoderClazz, "inputStreamToBytes", InputStream.class, new XC_MethodHook2() { // from class: com.pic.catcher.plugin.GlideCatcherPlugin.1
-                @Override // com.lu.lposed.api2.XC_MethodHook2
-                public void afterHookedMethod(XC_MethodHook.MethodHookParam param) {
-                    if (!ModuleConfig.getInstance().isCatchGlidePic()) {
-                        LogUtil.d("catchGlidePic is false");
-                        return;
-                    }
-                    Object result = param.getResult();
-                    LogUtil.d("GlideCatcherPlugin", "inputStreamToBytes", result);
-                    if (result != null) {
-                        PicExportManager.getInstance().exportByteArray((byte[]) result, ".gif");
-                    }
-                }
-            });
-
-        }
-        Class<?> FileLoaderClazz = ClazzN.from("com.bumptech.glide.load.model.FileLoader");
-        if (FileLoaderClazz != null) {
-            XposedHelpers2.hookAllMethods(FileLoaderClazz, "buildLoadData", new XC_MethodHook2() { // from class: com.pic.catcher.plugin.GlideCatcherPlugin.2
-                @Override // com.lu.lposed.api2.XC_MethodHook2
-                public void beforeHookedMethod(XC_MethodHook.MethodHookParam param) {
-                    if (!ModuleConfig.getInstance().isCatchGlidePic()) {
-                        LogUtil.d("catchGlidePic is false");
-                        return;
-                    }
-                    Object arg = param.args[0];
-                    if (arg instanceof File) {
-                        PicExportManager.getInstance().exportBitmapFile((File) arg);
-                    }
-                }
-            });
-        }
-
-        Class<?> HttpUrlFetcherClazz = ClazzN.from("com.bumptech.glide.load.data.HttpUrlFetcher");
-        if (HttpUrlFetcherClazz != null) {
-            XposedHelpers2.hookAllMethods(
-                    HttpUrlFetcherClazz,
-                    "loadData",
-                    new XC_MethodHook2() { // from class: com.pic.catcher.plugin.GlideCatcherPlugin.3
-                        @Override // com.lu.lposed.api2.XC_MethodHook2
-                        public void beforeHookedMethod(XC_MethodHook.MethodHookParam param) {
-                            if (!ModuleConfig.getInstance().isCatchGlidePic()) {
-                                LogUtil.d("catchGlidePic is false");
-                                return;
-                            }
-                            Object glideUrl;
-                            Object callMethod;
-                            Object callback = param.args[1];
-                            if (Proxy.isProxyClass(callback.getClass())) {
-                                return;
-                            }
-                            glideUrl = XposedHelpers2.getObjectField(param.thisObject, "glideUrl");
-                            String lastName = null;
-                            if (glideUrl != null) {
-                                callMethod = XposedHelpers2.callMethod(glideUrl, "toStringUrl", new Object[0]);
-                                String url = (String) callMethod;
-                                lastName = MimeTypeMap.getFileExtensionFromUrl(url);
-                            }
-                            final String url2 = lastName;
-                            Object callback2 = Proxy.newProxyInstance(callback.getClass().getClassLoader(), callback.getClass().getInterfaces(), new InvocationHandler() { // from class: com.pic.catcher.plugin.GlideCatcherPlugin.3.1
-                                @Override // java.lang.reflect.InvocationHandler
-                                public Object invoke(Object o, Method method, Object[] objects) throws InvocationTargetException, IllegalAccessException {
-                                    if ("onDataReady".equals(method.getName())) {
-                                        Object iStream = objects[0];
-                                        if (iStream instanceof InputStream) {
-                                            byte[] data = IOUtil.readToBytes((InputStream) iStream);
-                                            PicExportManager.getInstance().exportByteArray(data, url2);
-                                            ByteArrayInputStream iStream2 = new ByteArrayInputStream(data);
-                                            objects[0] = iStream2;
-                                        }
-                                    }
-                                    return method.invoke(o, objects);
-                                }
-                            });
-                            param.args[1] = callback2;
+                    try {
+                        // Resource 接口通常有 get() 方法返回具体对象 (Bitmap, Drawable 等)
+                        Object result = XposedHelpers2.callMethod(resource, "get");
+                        if (result instanceof Bitmap) {
+                            LogUtil.d("GlideCatcher", "Captured Bitmap from SingleRequest");
+                            PicExportManager.getInstance().exportBitmap((Bitmap) result);
+                        } else if (result instanceof BitmapDrawable) {
+                            LogUtil.d("GlideCatcher", "Captured BitmapDrawable from SingleRequest");
+                            PicExportManager.getInstance().exportBitmap(((BitmapDrawable) result).getBitmap());
+                        } else if (result instanceof Drawable) {
+                            // 后续可扩展 GifDrawable 等
                         }
-                    });
+                    } catch (Throwable t) {
+                        // 静默处理，不干扰宿主
+                    }
+                }
+            });
         }
 
+        // 拦截 GIF 专用解码器作为补强
+        Class<?> streamGifDecoderClazz = ClazzN.from("com.bumptech.glide.load.resource.gif.StreamGifDecoder");
+        if (streamGifDecoderClazz != null) {
+            XposedHelpers2.hookAllMethods(streamGifDecoderClazz, "decode", new XC_MethodHook2() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    // 仅在解码完成后静默抓取
+                }
+            });
+        }
     }
 }

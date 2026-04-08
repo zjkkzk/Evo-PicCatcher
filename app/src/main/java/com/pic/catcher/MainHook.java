@@ -30,9 +30,6 @@ import com.pic.catcher.plugin.SurfaceCatcherPlugin;
 import com.pic.catcher.plugin.WebViewCatcherPlugin;
 import com.pic.catcher.plugin.X5WebViewCatcherPlugin;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import de.robv.android.xposed.IXposedHookInitPackageResources;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.IXposedHookZygoteInit;
@@ -44,7 +41,6 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 public class MainHook implements IXposedHookLoadPackage, IXposedHookZygoteInit, IXposedHookInitPackageResources {
     private static String MODULE_PATH = "";
     private volatile boolean hasInit = false;
-    private List<XC_MethodHook.Unhook> initUnHookList = new ArrayList<>();
     private boolean isHookEntryHandle = false;
 
     @Override
@@ -55,25 +51,30 @@ public class MainHook implements IXposedHookLoadPackage, IXposedHookZygoteInit, 
         LogUtil.setLogger(new SimpleLogger() {
             @Override
             public void onLog(int level, @NonNull Object[] objects) {
+                // 仅在 Debug 下详细打印，减少宿主进程负担
                 if (BuildConfig.DEBUG) {
                     super.onLog(level, objects);
                 } else if (level > 1) {
-                    String msgText = buildLogText(objects);
-                    XposedHelpers2.log(TAG + " " + msgText);
+                    XposedHelpers2.log("PicCatcher: " + buildLogText(objects));
                 }
             }
         });
         
-        LogUtil.i("Process attached: ", lpparam.processName, Process.myPid());
+        LogUtil.i("Process attached: ", lpparam.processName);
 
+        // 仅 Hook Application.onCreate，这是最稳妥的切入点
         XposedHelpers2.findAndHookMethod(
                 Application.class.getName(),
                 lpparam.classLoader,
                 "onCreate",
                 new XC_MethodHook() {
                     @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        initPlugin((Context) param.thisObject, lpparam);
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        try {
+                            initPlugin((Context) param.thisObject, lpparam);
+                        } catch (Throwable t) {
+                            LogUtil.e("Plugin init failed", t);
+                        }
                     }
                 }
         );
@@ -81,17 +82,25 @@ public class MainHook implements IXposedHookLoadPackage, IXposedHookZygoteInit, 
 
     private synchronized void initPlugin(Context context, XC_LoadPackage.LoadPackageParam lpparam) {
         if (context == null || hasInit) return;
-        hasInit = true;
-        AppUtil.attachContext(context);
-
-        if (BuildConfig.APPLICATION_ID.equals(lpparam.packageName)) {
-            initSelfPlugins(context, lpparam);
-        } else {
-            initTargetPlugins(context, lpparam);
+        
+        // 关键防护：防止多进程 App 重复挂载 Context 导致崩溃
+        if (AppUtil.getContext() != null && AppUtil.getContext() != context) {
+            return;
         }
 
-        for (XC_MethodHook.Unhook unhook : initUnHookList) {
-            if (unhook != null) unhook.unhook();
+        try {
+            hasInit = true;
+            AppUtil.attachContext(context);
+            LogUtil.i("Initializing Plugins for: ", lpparam.packageName);
+
+            if (BuildConfig.APPLICATION_ID.equals(lpparam.packageName)) {
+                initSelfPlugins(context, lpparam);
+            } else {
+                initTargetPlugins(context, lpparam);
+            }
+        } catch (Throwable t) {
+            LogUtil.e("Plugin Registry failed", t);
+            hasInit = false; // 允许下次尝试
         }
     }
 

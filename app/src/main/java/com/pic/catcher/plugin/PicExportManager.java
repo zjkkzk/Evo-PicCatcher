@@ -17,6 +17,7 @@ import com.pic.catcher.util.PicUtil;
 import com.pic.catcher.util.XLog;
 import com.pic.catcher.util.http.HttpConnectUtil;
 
+import android.util.Log;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -50,8 +51,10 @@ public class PicExportManager {
         // 宿主私有缓存路径
         File cacheDir = new File(context.getExternalCacheDir(), "PicCatcher");
         
+        Log.e("PicCatcher_Host", ">>> Trying to save image: " + fileName + " to " + cacheDir.getAbsolutePath());
+
         if (!cacheDir.exists() && !cacheDir.mkdirs()) {
-            saveToHostPrivate(data, fileName);
+            Log.e("PicCatcher_Host", "!!! Directory creation failed, skipping.");
             return;
         }
         
@@ -63,26 +66,13 @@ public class PicExportManager {
                 fos.flush();
                 try { fos.getFD().sync(); } catch (Exception ignored) {}
             }
-            // 宿主逻辑完成，文件等待模块 Service 扫描搬运
+            Log.e("PicCatcher_Host", "+++ Save SUCCESS: " + cacheFile.getAbsolutePath());
         } catch (Exception e) {
-            log("Cache write failed: " + e.getMessage());
-            saveToHostPrivate(data, fileName);
+            Log.e("PicCatcher_Host", "--- Save FAILED: " + e.getMessage());
         }
     }
 
-    private void saveToHostPrivate(byte[] data, String fileName) {
-        try {
-            File dir = AppUtil.getContext().getExternalFilesDir("Pictures");
-            if (dir != null) {
-                File dest = new File(dir, fileName);
-                try (FileOutputStream fos = new FileOutputStream(dest)) {
-                    fos.write(data);
-                }
-            }
-        } catch (Exception e) {
-            log("Fallback failed: " + e.getMessage());
-        }
-    }
+    // 删除了 saveToHostPrivate，避免在宿主 files 目录下产生冗余副本
 
     public void exportBitmap(Bitmap bitmap) {
         runOnIo(() -> {

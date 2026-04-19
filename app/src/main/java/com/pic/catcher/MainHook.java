@@ -54,6 +54,9 @@ public class MainHook implements IXposedHookLoadPackage, IXposedHookZygoteInit, 
         }
         isHookEntryHandle = true;
 
+        // 强制使用最原始的 Xposed 日志，不经过任何自定义 Logger 过滤
+        XposedHelpers2.log("PicCatcher_MainHook: handleLoadPackage started for " + lpparam.packageName);
+        
         LogUtil.setLogger(new SimpleLogger() {
             @Override
             public void onLog(int level, @NonNull Object[] objects) {
@@ -168,6 +171,7 @@ public class MainHook implements IXposedHookLoadPackage, IXposedHookZygoteInit, 
     }
 
     private void initPlugin(Context context, XC_LoadPackage.LoadPackageParam lpparam) {
+        XposedHelpers2.log("PicCatcher_MainHook: initPlugin for " + lpparam.packageName);
         if (context == null) {
             LogUtil.w("context is null");
             return;

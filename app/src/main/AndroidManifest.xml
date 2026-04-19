@@ -5,6 +5,12 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Shizuku/Sui 权限 -->
     <uses-permission android:name="moe.shizuku.privileged.api.permission.RECEIVE_SUI_BINDER" />
+    <!-- 遍历 Android/data 必需 -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- 前台服务必备 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <queries>
         <intent>
@@ -61,6 +67,16 @@
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
+        </service>
+
+        <service
+            android:name=".service.PicWatcherService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Monitoring and harvesting images from host app cache directories to centralized storage via Shell/Shizuku." />
         </service>
 
         <activity

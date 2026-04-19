@@ -34,33 +34,21 @@ public class ShellUtil {
     public static boolean isSui() {
         try {
             if (isShizukuAvailable()) {
-                // 如果已授权，UID 为 0 说明是 Sui
                 if (hasShizukuPermission()) {
                     return Shizuku.getUid() == 0;
                 }
-                // 如果未授权，Sui 的版本号通常很大 (例如 12000+)
-                // 而原生 Shizuku 版本号目前在 13 左右
                 return Shizuku.getVersion() >= 1000;
             }
         } catch (Throwable ignored) {}
         return false;
     }
 
-    public static boolean hasRootPermission() {
-        try {
-            Process process = Runtime.getRuntime().exec("su");
-            DataOutputStream os = new DataOutputStream(process.getOutputStream());
-            os.writeBytes("id\n");
-            os.writeBytes("exit\n");
-            os.flush();
-            int exitCode = process.waitFor();
-            return exitCode == 0;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
     public static ShellResult runCommand(String command) {
+        String logMsg = "[ShellExec] " + command;
+        // 核心：在尝试任何 Shell 之前，先触发一次 Java 层日志
+        android.util.Log.e("PicWatcherShell", "JAVA_TRIGGER: " + logMsg);
+        System.out.println("JAVA_STDOUT: " + logMsg);
+        
         if (isShizukuAvailable() && hasShizukuPermission()) {
             return runShizukuCommand(command);
         } else {
@@ -70,28 +58,28 @@ public class ShellUtil {
 
     private static ShellResult runShizukuCommand(String command) {
         try {
-            // 由于 Shizuku.newProcess 在 SDK 13 是 private 的，我们需要通过反射调用 IShizukuService
+            // 通过反射获取 Shizuku 内部服务接口，避免编译器对 private 静态方法的拦截
             java.lang.reflect.Method getServiceMethod = Shizuku.class.getDeclaredMethod("requireService");
             getServiceMethod.setAccessible(true);
             Object service = getServiceMethod.invoke(null);
             
-            if (service == null) return new ShellResult(-1, "", "IShizukuService is null");
-
+            // 调用 IShizukuService.newProcess(...) 
+            // 返回类型为 moe.shizuku.server.IRemoteProcess
             java.lang.reflect.Method newProcessMethod = service.getClass().getMethod(
                     "newProcess", String[].class, String[].class, String.class);
             
-            // 调用服务端方法，返回远程进程的 IBinder
-            android.os.IBinder binder = (android.os.IBinder) newProcessMethod.invoke(service, new String[]{"sh", "-c", command}, null, null);
+            Object remoteProcess = newProcessMethod.invoke(service, new String[]{"sh", "-c", command}, null, null);
             
-            // 使用反射实例化包级私有的 ShizukuRemoteProcess
+            // 使用 IRemoteProcess 实例构造 ShizukuRemoteProcess (java.lang.Process 的子类)
+            Class<?> remoteProcessClass = Class.forName("moe.shizuku.server.IRemoteProcess");
             java.lang.reflect.Constructor<?> constructor = Class.forName("rikka.shizuku.ShizukuRemoteProcess")
-                    .getDeclaredConstructor(android.os.IBinder.class);
+                    .getDeclaredConstructor(remoteProcessClass);
             constructor.setAccessible(true);
-            Process process = (Process) constructor.newInstance(binder);
-
+            
+            Process process = (Process) constructor.newInstance(remoteProcess);
             return readProcess(process);
         } catch (Exception e) {
-            Log.e(TAG, "Shizuku/Sui command failed: " + command, e);
+            Log.e(TAG, "Shizuku Shell Critical Error: " + e.getMessage(), e);
             return new ShellResult(-1, "", e.getMessage());
         }
     }
@@ -107,7 +95,7 @@ public class ShellUtil {
             os.flush();
             return readProcess(process);
         } catch (Exception e) {
-            Log.e(TAG, "SU command failed: " + command, e);
+            System.err.println("PicWatcher SU Error: " + e.getMessage());
             return new ShellResult(-1, "", e.getMessage());
         } finally {
             try {

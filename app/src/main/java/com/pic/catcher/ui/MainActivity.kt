@@ -3,6 +3,7 @@ package com.pic.catcher.ui
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -14,6 +15,7 @@ import com.pic.catcher.base.BaseActivity
 import com.pic.catcher.databinding.LayoutMainBinding
 import com.pic.catcher.route.AppRouter
 import com.pic.catcher.util.ShellUtil
+import com.pic.catcher.service.PicWatcherService
 import rikka.shizuku.Shizuku
 import com.pic.catcher.ui.vm.AppUpdateViewModel
 import com.pic.catcher.base.ViewModelProviders
@@ -71,6 +73,15 @@ class MainActivity : BaseActivity() {
         handleDeeplinkRoute(intent)
         
         Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
+        
+        // 显式启动图片监控搬运服务
+        Log.wtf("PicWatcher", "MainActivity: Attempting to start PicWatcherService")
+        try {
+            startService(Intent(this, PicWatcherService::class.java))
+            Log.wtf("PicWatcher", "MainActivity: startService() called successfully")
+        } catch (e: Exception) {
+            Log.wtf("PicWatcher", "MainActivity: Failed to start service", e)
+        }
     }
 
     override fun onDestroy() {

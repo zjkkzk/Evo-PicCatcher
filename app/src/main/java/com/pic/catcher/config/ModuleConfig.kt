@@ -69,6 +69,13 @@ class ModuleConfig(var source: JSONObject) {
             source.put("picDefaultSaveFormat", value)
         }
 
+    var shellAuthType: String = ""
+        get() = JSONX.optString(source, "shellAuthType", "") ?: ""
+        set(value) {
+            field = value
+            source.put("shellAuthType", value)
+        }
+
     fun toJson(): String {
         return source.toString()
     }
@@ -80,20 +87,25 @@ class ModuleConfig(var source: JSONObject) {
     companion object {
         private var cachedInstance: ModuleConfig? = null
 
+        private var lastReloadTime = 0L
+        private const val RELOAD_INTERVAL = 10000L // 10秒重载一次配置，避免磁盘 IO 过频
+
         @JvmStatic
         fun getInstance(): ModuleConfig {
             val table = LocalKVUtil.getTable("module")
             
-            // 安全检查：通过类名判断，避免在 UI 进程中因为找不到 XSharedPreferences 类而崩溃
+            // 安全检查：仅在 XSharedPreferences 且超过间隔时重载
             if (table.javaClass.name.contains("XSharedPreferences")) {
-                try {
-                    // 反射调用 reload() 强制刷新配置
-                    table.javaClass.getMethod("reload").invoke(table)
-                } catch (e: Exception) {
-                    LogUtil.e("Reload config failed", e)
+                val now = System.currentTimeMillis()
+                if (now - lastReloadTime > RELOAD_INTERVAL) {
+                    try {
+                        table.javaClass.getMethod("reload").invoke(table)
+                        lastReloadTime = now
+                        cachedInstance = null // 清除缓存以触发重新加载
+                    } catch (e: Exception) {
+                        LogUtil.e("Reload config failed", e)
+                    }
                 }
-                val moduleConfigStr = table.getString("module_config", "{}")
-                return ModuleConfig(moduleConfigStr.toJSONObject() ?: JSONObject())
             }
             
             if (cachedInstance == null) {

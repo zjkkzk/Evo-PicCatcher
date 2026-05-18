@@ -1,127 +1,126 @@
 package com.pic.catcher.util;
 
-import android.content.pm.PackageManager;
 import android.util.Log;
 
 import java.io.BufferedReader;
-import java.io.DataOutputStream;
+import java.io.BufferedWriter;
 import java.io.InputStreamReader;
-
-import rikka.shizuku.Shizuku;
+import java.io.OutputStreamWriter;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class ShellUtil {
     private static final String TAG = "ShellUtil";
+    private static Boolean cachedRootStatus = null;
+    private static String cachedSuManagerName = null;
+    
+    private static Process persistentProcess = null;
+    private static BufferedWriter writer = null;
+    private static BufferedReader reader = null;
+    private static final ReentrantLock lock = new ReentrantLock();
 
-    public static boolean isShizukuAvailable() {
+    /**
+     * 获取持久化的 Root Shell 会话
+     * 核心逻辑：只在第一次调用时触发授权弹窗，后续静默执行
+     */
+    private static boolean ensureSession() {
+        if (persistentProcess != null && persistentProcess.isAlive()) {
+            return true;
+        }
+        lock.lock();
         try {
-            return Shizuku.pingBinder();
-        } catch (Throwable e) {
+            if (persistentProcess != null && persistentProcess.isAlive()) return true;
+            
+            Log.d(TAG, "Initializing persistent SU session...");
+            persistentProcess = Runtime.getRuntime().exec("su");
+            writer = new BufferedWriter(new OutputStreamWriter(persistentProcess.getOutputStream()));
+            reader = new BufferedReader(new InputStreamReader(persistentProcess.getInputStream()));
+            return true;
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to start SU session", e);
+            closeSession();
             return false;
+        } finally {
+            lock.unlock();
         }
     }
 
-    public static boolean hasShizukuPermission() {
-        if (isShizukuAvailable()) {
-            try {
-                return Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED;
-            } catch (Throwable e) {
-                return false;
-            }
-        }
-        return false;
-    }
-
-    public static boolean isSui() {
+    private static void closeSession() {
         try {
-            if (isShizukuAvailable()) {
-                if (hasShizukuPermission()) {
-                    return Shizuku.getUid() == 0;
-                }
-                return Shizuku.getVersion() >= 1000;
+            if (writer != null) {
+                writer.write("exit\n");
+                writer.flush();
+                writer.close();
             }
-        } catch (Throwable ignored) {}
-        return false;
+            if (reader != null) reader.close();
+            if (persistentProcess != null) {
+                persistentProcess.destroy();
+            }
+        } catch (Exception ignored) {}
+        writer = null;
+        reader = null;
+        persistentProcess = null;
+    }
+
+    public static boolean hasRootPermission() {
+        if (cachedRootStatus != null) return cachedRootStatus;
+        ShellResult res = runCommandInternal("id", 3000);
+        boolean success = res.isSuccess() && res.stdout.contains("uid=0");
+        if (success) cachedRootStatus = true;
+        return success;
+    }
+
+    public static String getSuManagerName() {
+        if (cachedSuManagerName != null) return cachedSuManagerName;
+        if (!hasRootPermission()) return "SU管理器";
+        
+        if (runCommandInternal("magisk -v", 1000).isSuccess()) return cachedSuManagerName = "Magisk";
+        if (runCommandInternal("ksu --version", 1000).isSuccess()) return cachedSuManagerName = "KernelSU";
+        if (runCommandInternal("apatch --version", 1000).isSuccess()) return cachedSuManagerName = "APatch";
+        
+        ShellResult res = runCommandInternal("su -v", 1000);
+        if (res.isSuccess() && res.stdout.contains("SuperSU")) return cachedSuManagerName = "SuperSU";
+        
+        return "SU管理器";
     }
 
     public static ShellResult runCommand(String command) {
-        String logMsg = "[ShellExec] " + command;
-        // 核心：在尝试任何 Shell 之前，先触发一次 Java 层日志
-        android.util.Log.e("PicWatcherShell", "JAVA_TRIGGER: " + logMsg);
-        System.out.println("JAVA_STDOUT: " + logMsg);
-        
-        if (isShizukuAvailable() && hasShizukuPermission()) {
-            return runShizukuCommand(command);
-        } else {
-            return runSuCommand(command);
-        }
+        return runCommandInternal(command, 15000);
     }
 
-    private static ShellResult runShizukuCommand(String command) {
-        try {
-            // 通过反射获取 Shizuku 内部服务接口，避免编译器对 private 静态方法的拦截
-            java.lang.reflect.Method getServiceMethod = Shizuku.class.getDeclaredMethod("requireService");
-            getServiceMethod.setAccessible(true);
-            Object service = getServiceMethod.invoke(null);
-            
-            // 调用 IShizukuService.newProcess(...) 
-            // 返回类型为 moe.shizuku.server.IRemoteProcess
-            java.lang.reflect.Method newProcessMethod = service.getClass().getMethod(
-                    "newProcess", String[].class, String[].class, String.class);
-            
-            Object remoteProcess = newProcessMethod.invoke(service, new String[]{"sh", "-c", command}, null, null);
-            
-            // 使用 IRemoteProcess 实例构造 ShizukuRemoteProcess (java.lang.Process 的子类)
-            Class<?> remoteProcessClass = Class.forName("moe.shizuku.server.IRemoteProcess");
-            java.lang.reflect.Constructor<?> constructor = Class.forName("rikka.shizuku.ShizukuRemoteProcess")
-                    .getDeclaredConstructor(remoteProcessClass);
-            constructor.setAccessible(true);
-            
-            Process process = (Process) constructor.newInstance(remoteProcess);
-            return readProcess(process);
-        } catch (Exception e) {
-            Log.e(TAG, "Shizuku Shell Critical Error: " + e.getMessage(), e);
-            return new ShellResult(-1, "", e.getMessage());
+    /**
+     * 在持久化会话中执行命令
+     */
+    private static ShellResult runCommandInternal(String command, long timeout) {
+        if (!ensureSession()) {
+            return new ShellResult(-1, "", "SU session unavailable");
         }
-    }
 
-    private static ShellResult runSuCommand(String command) {
-        Process process = null;
-        DataOutputStream os = null;
+        lock.lock();
         try {
-            process = Runtime.getRuntime().exec("su");
-            os = new DataOutputStream(process.getOutputStream());
-            os.writeBytes(command + "\n");
-            os.writeBytes("exit\n");
-            os.flush();
-            return readProcess(process);
+            String marker = "END_OF_COMMAND_" + System.currentTimeMillis();
+            writer.write(command + "\necho " + marker + "\n");
+            writer.flush();
+
+            StringBuilder sb = new StringBuilder();
+            long startTime = System.currentTimeMillis();
+            while (System.currentTimeMillis() - startTime < timeout) {
+                if (reader.ready()) {
+                    String line = reader.readLine();
+                    if (line == null || line.contains(marker)) break;
+                    sb.append(line).append("\n");
+                } else {
+                    Thread.sleep(50);
+                }
+            }
+            return new ShellResult(0, sb.toString().trim(), "");
         } catch (Exception e) {
-            System.err.println("PicWatcher SU Error: " + e.getMessage());
+            Log.e(TAG, "Execute command failed, restarting session", e);
+            closeSession();
             return new ShellResult(-1, "", e.getMessage());
         } finally {
-            try {
-                if (os != null) os.close();
-                if (process != null) process.destroy();
-            } catch (Exception ignored) {}
+            lock.unlock();
         }
-    }
-
-    private static ShellResult readProcess(Process process) throws Exception {
-        BufferedReader successReader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-        BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-        
-        StringBuilder successMsg = new StringBuilder();
-        StringBuilder errorMsg = new StringBuilder();
-        String line;
-        
-        while ((line = successReader.readLine()) != null) {
-            successMsg.append(line).append("\n");
-        }
-        while ((line = errorReader.readLine()) != null) {
-            errorMsg.append(line).append("\n");
-        }
-        
-        int exitCode = process.waitFor();
-        return new ShellResult(exitCode, successMsg.toString().trim(), errorMsg.toString().trim());
     }
 
     public static class ShellResult {

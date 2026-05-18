@@ -3,8 +3,6 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Shizuku/Sui 权限 -->
-    <uses-permission android:name="moe.shizuku.privileged.api.permission.RECEIVE_SUI_BINDER" />
     <!-- 遍历 Android/data 必需 -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <!-- 前台服务必备 -->
@@ -16,7 +14,6 @@
         <intent>
             <action android:name="android.intent.action.MAIN" />
         </intent>
-        <package android:name="moe.shizuku.privileged.api" />
     </queries>
 
     <application
@@ -43,16 +40,6 @@
             </intent-filter>
         </provider>
 
-        <provider
-            android:name="rikka.shizuku.ShizukuProvider"
-            android:authorities="${applicationId}.shizuku"
-            android:enabled="true"
-            android:exported="true" />
-
-        <meta-data
-            android:name="rikka.shizuku.api.VERSION"
-            android:value="13" />
-
         <meta-data android:name="xposedmodule" android:value="true" />
         <meta-data android:name="xposeddescription" android:value="@string/app_xposed_description" />
         <meta-data android:name="xposedminversion" android:value="93" />
@@ -76,7 +63,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Monitoring and harvesting images from host app cache directories to centralized storage via Shell/Shizuku." />
+                android:value="Monitoring and harvesting images from host app cache directories to centralized storage via Shell." />
         </service>
 
         <activity

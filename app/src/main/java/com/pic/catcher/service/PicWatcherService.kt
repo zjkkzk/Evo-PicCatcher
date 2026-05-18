@@ -9,37 +9,38 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
-import android.os.Looper
 import android.util.Log
 import com.pic.catcher.config.ModuleConfig
 import com.pic.catcher.util.ShellUtil
 
 /**
- * 自动搬运服务 - 前台 Shell 驱动版
- * 彻底解决 Service 被杀和 Java File API 权限受限问题
+ * 自动搬运服务 - 优化版
+ * 1. 运行在独立后台线程，杜绝界面卡死
+ * 2. 脚本化批量搬运，极低 CPU 占用
  */
 class PicWatcherService : Service() {
 
     companion object {
         private const val TAG = "PicWatcher"
         private const val CHANNEL_ID = "pic_watcher_service"
-        // 预设多个可能的根路径，增强兼容性
-        private val DATA_ROOTS = arrayOf("/sdcard/Android/data", "/storage/emulated/0/Android/data")
         private const val MODULE_PRIVATE_ROOT = "/sdcard/Android/data/com.evo.piccatcher/files/Pictures"
         private const val PUBLIC_ROOT = "/sdcard/Pictures/PicCatcher"
     }
 
-    private val handler = Handler(Looper.getMainLooper())
+    private lateinit var serviceHandler: Handler
+    private lateinit var handlerThread: HandlerThread
+
     private val harvestRunnable = object : Runnable {
         override fun run() {
             try {
-                harvestAllViaShell()
+                performBatchHarvest()
             } catch (e: Exception) {
-                Log.wtf(TAG, "Critical Loop Error", e)
+                Log.e(TAG, "Harvest error", e)
             } finally {
-                // 每 15 秒循环一次，无论成功失败
-                handler.postDelayed(this, 15000)
+                // 将扫描频率降低到 60 秒，减少对系统的打扰和电量消耗
+                serviceHandler.postDelayed(this, 60000)
             }
         }
     }
@@ -47,10 +48,13 @@ class PicWatcherService : Service() {
     override fun onCreate() {
         super.onCreate()
         startForegroundService()
-        Log.wtf(TAG, "Service Created - Start Monitoring")
         
-        // 5秒后开始第一次扫描
-        handler.postDelayed(harvestRunnable, 5000)
+        // 关键修复：创建专门的后台线程，绝不在主线程运行 Shell
+        handlerThread = HandlerThread("PicWatcherThread")
+        handlerThread.start()
+        serviceHandler = Handler(handlerThread.looper)
+        
+        serviceHandler.postDelayed(harvestRunnable, 5000)
     }
 
     private fun startForegroundService() {
@@ -60,11 +64,10 @@ class PicWatcherService : Service() {
             manager.createNotificationChannel(channel)
             
             val notification = Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("PicCatcher is monitoring")
+                .setContentTitle("PicCatcher is active")
                 .setSmallIcon(android.R.drawable.ic_menu_save)
                 .build()
             
-            // Android 14 (API 34) 必须显式传入 foregroundServiceType
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 startForeground(101, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
             } else {
@@ -73,98 +76,46 @@ class PicWatcherService : Service() {
         }
     }
 
-    private fun harvestAllViaShell() {
-        Log.wtf(TAG, "--- Start Shell Scan [Heartbeat] ---")
-        
-        if (!ShellUtil.hasShizukuPermission()) {
-            Log.e(TAG, "Shizuku permission NOT granted, skipping harvest")
-            return
-        }
+    /**
+     * 使用单条复杂的 Shell 脚本完成批量检测和搬运
+     * 避免了为每个包名重复创建 su 进程导致的卡顿
+     */
+    private fun performBatchHarvest() {
+        val authType = ModuleConfig.getInstance().shellAuthType
+        if (authType.isEmpty()) return
 
-        // 自动探测可访问的 Android/data 路径
-        var activeDataRoot = ""
-        for (root in DATA_ROOTS) {
-            val check = ShellUtil.runCommand("[ -d \"$root\" ] && echo 'OK'")
-            if (check.stdout.contains("OK")) {
-                activeDataRoot = root
-                break
-            }
-        }
-
-        if (activeDataRoot.isEmpty()) {
-            Log.e(TAG, "Unable to find a valid Android/data path via Shell")
-            return
-        }
-
-        Log.i(TAG, "Using Data Root: $activeDataRoot")
-        
-        // 1. 获取所有包名
-        val lsResult = ShellUtil.runCommand("ls $activeDataRoot")
-        if (!lsResult.isSuccess) {
-            Log.e(TAG, "LS $activeDataRoot failed: ${lsResult.stderr}")
-            return
-        }
-
-        val packages = lsResult.stdout.split("\n").map { it.trim() }.filter { it.isNotBlank() }
-        
-        for (pkg in packages) {
-            if (pkg == "com.evo.piccatcher") continue
-
-            val cachePath = "$activeDataRoot/$pkg/cache/PicCatcher"
-            
-            // 2. 检查该包是否有缓存目录
-            val checkDir = ShellUtil.runCommand("[ -d \"$cachePath\" ] && echo 'YES'")
-            if (checkDir.stdout.contains("YES")) {
-                Log.i(TAG, "Found target: $pkg at $cachePath")
-                
-                // 3. 检查是否有文件
-                val checkFiles = ShellUtil.runCommand("ls \"$cachePath\" | wc -l")
-                val count = checkFiles.stdout.trim().toIntOrNull() ?: 0
-                
-                if (count > 0) {
-                    Log.wtf(TAG, "Harvesting $count files from $pkg")
-                    doHarvest(pkg, cachePath)
-                }
-
-                // 4. 存活检查及清理 (如果宿主进程不在了，清理其残留缓存)
-                if (!isPackageRunning(pkg)) {
-                    Log.i(TAG, "Host $pkg stopped, cleaning up cache")
-                    ShellUtil.runCommand("rm -rf \"$cachePath\"")
-                }
-            }
-        }
-    }
-
-    private fun doHarvest(pkg: String, cachePath: String) {
         val isInternal = ModuleConfig.getInstance().isSaveToInternal
         val targetRoot = if (isInternal) MODULE_PRIVATE_ROOT else PUBLIC_ROOT
-        val targetDir = "$targetRoot/$pkg"
 
-        // 搬运逻辑：cp -> rm
-        val cmd = "mkdir -p \"$targetDir\" && " +
-                  "touch \"$targetRoot/.nomedia\" && " +
-                  "cp -f \"$cachePath\"/* \"$targetDir/\" && " +
-                  "rm -f \"$cachePath\"/*"
-        
-        val res = ShellUtil.runCommand(cmd)
-        if (res.isSuccess) {
-            Log.wtf(TAG, "SUCCESS: $pkg -> $targetDir")
-        } else {
-            Log.e(TAG, "MOVE FAIL: $pkg, err: ${res.stderr}")
-        }
+        // 核心脚本：
+        // 1. 查找所有 Android/data 下的 PicCatcher 缓存目录
+        // 2. 如果目录下有文件，则创建目标目录并移动文件
+        // 3. 这里的 2>/dev/null 是为了防止没有权限的目录产生报错干扰
+        val script = """
+            DATA_ROOT="/sdcard/Android/data"
+            TARGET_BASE="$targetRoot"
+            mkdir -p "${"$"}TARGET_BASE"
+            touch "${"$"}TARGET_BASE/.nomedia"
+            
+            for dir in ${"$"}DATA_ROOT/*/cache/PicCatcher; do
+                [ -d "${"$"}dir" ] || continue
+                # 检查目录是否为空
+                if [ -n "$(ls -A "${"$"}dir" 2>/dev/null)" ]; then
+                    pkg=$(echo "${"$"}dir" | cut -d'/' -f5)
+                    dest="${"$"}TARGET_BASE/${"$"}pkg"
+                    mkdir -p "${"$"}dest"
+                    cp -f "${"$"}dir"/* "${"$"}dest/" 2>/dev/null && rm -f "${"$"}dir"/* 2>/dev/null
+                fi
+            done
+        """.trimIndent()
+
+        ShellUtil.runCommand(script)
     }
 
-    private fun isPackageRunning(pkg: String): Boolean {
-        val res = ShellUtil.runCommand("ps -A | grep \"$pkg\"")
-        return res.stdout.split("\n").any { it.contains(pkg) && !it.contains("grep") }
-    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return START_STICKY
-    }
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     override fun onDestroy() {
-        handler.removeCallbacks(harvestRunnable)
+        handlerThread.quitSafely()
         super.onDestroy()
     }
 

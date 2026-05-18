@@ -31,7 +31,6 @@ import com.pic.catcher.util.ext.dp
 import com.pic.catcher.util.ext.setPadding
 import com.pic.catcher.util.ext.toDoubleElse
 import com.pic.catcher.util.ext.toIntElse
-import rikka.shizuku.Shizuku
 
 class SettingsFragment : BaseFragment() {
 
@@ -40,35 +39,13 @@ class SettingsFragment : BaseFragment() {
     private lateinit var moduleConfig: ModuleConfig
     private lateinit var mConfigSourceText: String
 
-    // Shizuku 权限请求监听器
-    private val ON_REQUEST_PERMISSION_RESULT = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
-        if (requestCode == 1001) {
-            if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(context, "Shizuku 权限已授予", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(context, "Shizuku 权限被拒绝", Toast.LENGTH_SHORT).show()
-            }
-            mAdapter.notifyDataSetChanged()
-        }
-    }
-
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         binding = FragmentSettingsBinding.inflate(inflater, container, false)
-        try {
-            Shizuku.addRequestPermissionResultListener(ON_REQUEST_PERMISSION_RESULT)
-        } catch (e: Throwable) {
-            e.printStackTrace()
-        }
         return binding.root
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
-        try {
-            Shizuku.removeRequestPermissionResultListener(ON_REQUEST_PERMISSION_RESULT)
-        } catch (e: Throwable) {
-            e.printStackTrace()
-        }
     }
 
     override fun onDestroy() {
@@ -116,16 +93,8 @@ class SettingsFragment : BaseFragment() {
                             moduleConfig.isSaveToInternal = checked
                             desc = if (checked) getString(R.string.config_save_to_internal_on) else getString(R.string.config_save_to_internal_off)
                             
-                            if (checked && !ShellUtil.hasShizukuPermission()) {
-                                if (ShellUtil.isShizukuAvailable()) {
-                                    try {
-                                        Shizuku.requestPermission(1001)
-                                    } catch (e: Throwable) {
-                                        Toast.makeText(context, "请求 Shizuku 权限失败: ${e.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                                } else {
-                                    Toast.makeText(context, "未检测到 Shizuku，将尝试使用 Root 权限（需要系统已 Root）", Toast.LENGTH_LONG).show()
-                                }
+                            if (checked) {
+                                Toast.makeText(context, "将尝试使用 Root 权限进行搬运（需要系统已 Root）", Toast.LENGTH_LONG).show()
                             }
                             
                             mAdapter.notifyDataSetChanged()
@@ -135,8 +104,8 @@ class SettingsFragment : BaseFragment() {
                 }
             )
 
-            // 添加 Shizuku 状态显示
-            items.add(TextItem("Shizuku 状态", if (ShellUtil.hasShizukuPermission()) "已授权" else if (ShellUtil.isShizukuAvailable()) "未授权 (点击申请)" else "未运行"))
+            // 添加授权状态显示
+            items.add(TextItem("授权状态", if (ShellUtil.hasRootPermission()) "Root 已授权" else "未授权 (请到首页授权)"))
 
             items.addAll(listOf(
                 EditItem(
@@ -175,22 +144,14 @@ class SettingsFragment : BaseFragment() {
         }
         binding.listView.adapter = mAdapter
         
-        // 处理 TextItem 点击申请权限
+        // 处理 TextItem 点击
         binding.listView.setOnItemClickListener { _, _, position, _ ->
             val item = mAdapter.getItem(position)
-            if (item is TextItem && item.name == "Shizuku 状态") {
-                if (ShellUtil.isShizukuAvailable()) {
-                    if (!ShellUtil.hasShizukuPermission()) {
-                        try {
-                            Shizuku.requestPermission(1001)
-                        } catch (e: Throwable) {
-                            Toast.makeText(context, "请求 Shizuku 权限失败: ${e.message}", Toast.LENGTH_SHORT).show()
-                        }
-                    } else {
-                        Toast.makeText(context, "Shizuku 权限已授予", Toast.LENGTH_SHORT).show()
-                    }
+            if (item is TextItem && item.name == "授权状态") {
+                if (ShellUtil.hasRootPermission()) {
+                    Toast.makeText(context, "Root 权限正常", Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(context, "Shizuku 未运行", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "请前往首页点击“激活”或“申请权限”", Toast.LENGTH_SHORT).show()
                 }
             }
         }

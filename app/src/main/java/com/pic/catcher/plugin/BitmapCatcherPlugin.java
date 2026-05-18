@@ -105,9 +105,21 @@ public class BitmapCatcherPlugin implements IPlugin {
                 BitmapFactory.Options.class,
                 new XC_MethodHook2() {
                     @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        Bitmap bitmap = (Bitmap) param.getResult();
-                        PicExportManager.getInstance().exportBitmap(bitmap);
+                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                        byte[] data = (byte[]) param.args[0];
+                        int offset = (int) param.args[1];
+                        int length = (int) param.args[2];
+                        if (data != null && length > 0) {
+                            // 直接导出原始字节，避免 Bitmap 压缩
+                            byte[] actualData;
+                            if (offset == 0 && length == data.length) {
+                                actualData = data;
+                            } else {
+                                actualData = new byte[length];
+                                System.arraycopy(data, offset, actualData, 0, length);
+                            }
+                            PicExportManager.getInstance().exportByteArray(actualData, null);
+                        }
                     }
                 }
         );

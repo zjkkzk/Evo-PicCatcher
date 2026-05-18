@@ -19,6 +19,7 @@ import com.pic.catcher.plugin.BitmapCatcherPlugin;
 import com.pic.catcher.plugin.CanvasCatcherPlugin;
 import com.pic.catcher.plugin.CoilCatcherPlugin;
 import com.pic.catcher.plugin.DrawableCatcherPlugin;
+import com.pic.catcher.plugin.FileCatcherPlugin;
 import com.pic.catcher.plugin.FrescoCatcherPlugin;
 import com.pic.catcher.plugin.GlideCatcherPlugin;
 import com.pic.catcher.plugin.ImageDecoderCatcherPlugin;
@@ -217,7 +218,8 @@ public class MainHook implements IXposedHookLoadPackage, IXposedHookZygoteInit, 
                 ImageViewCatcherPlugin.class,
                 ImageDecoderCatcherPlugin.class,
                 CoilCatcherPlugin.class,
-                NativeBitmapCatcherPlugin.class
+                NativeBitmapCatcherPlugin.class,
+                FileCatcherPlugin.class
         ).handleHooks(context, lpparam);
 
     }

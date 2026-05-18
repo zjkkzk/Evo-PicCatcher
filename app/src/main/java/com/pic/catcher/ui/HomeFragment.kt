@@ -10,15 +10,18 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import com.google.android.material.color.MaterialColors
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.lu.magic.util.thread.AppExecutor
 import com.pic.catcher.AppBuildInfo
 import com.pic.catcher.BuildConfig
 import com.pic.catcher.R
 import com.pic.catcher.SelfHook
 import com.pic.catcher.base.BaseFragment
+import com.pic.catcher.config.ModuleConfig
 import com.pic.catcher.databinding.FragmentHomeBinding
 import com.pic.catcher.databinding.ItemInfoRowBinding
 import com.pic.catcher.util.ShellUtil
-import rikka.shizuku.Shizuku
+import android.widget.Toast
 
 class HomeFragment : BaseFragment() {
     private lateinit var binding: FragmentHomeBinding
@@ -35,6 +38,10 @@ class HomeFragment : BaseFragment() {
         initGithub()
     }
 
+    override fun onDestroyView() {
+        super.onDestroyView()
+    }
+
     override fun onResume() {
         super.onResume()
         initStatus()
@@ -43,54 +50,87 @@ class HomeFragment : BaseFragment() {
 
     private fun initShellStatus() {
         val context = context ?: return
-        val isShizukuAvailable = ShellUtil.isShizukuAvailable()
-        val hasPermission = ShellUtil.hasShizukuPermission()
-        val isSui = ShellUtil.isSui()
+        val config = ModuleConfig.getInstance()
+        val authType = config.shellAuthType
 
-        if (hasPermission) {
+        // 首页也不再实时检查权限，直接根据配置显示
+        if (authType.isNotEmpty()) {
             val colorContainer = MaterialColors.getColor(context, com.google.android.material.R.attr.colorTertiaryContainer, Color.LTGRAY)
             val onColorContainer = MaterialColors.getColor(context, com.google.android.material.R.attr.colorOnTertiaryContainer, Color.BLACK)
 
             binding.shellStatusCard.setCardBackgroundColor(onColorContainer)
             binding.ivShellStatusIcon.setImageResource(R.drawable.ic_icon_check)
             binding.ivShellStatusIcon.imageTintList = ColorStateList.valueOf(colorContainer)
-            binding.tvShellStatusTitle.text = "Shell"
+            
+            // 默认显示文案，不调用任何 Shell 工具类，确保瞬间响应
+            val defaultDesc = if (authType == "Root") "Root 已授权" else "Shell 已授权"
+            
+            binding.tvShellStatusTitle.text = if (authType == "Root") "Root" else "Shell"
             binding.tvShellStatusTitle.setTextColor(colorContainer)
-            binding.tvShellStatusDesc.text = if (isSui) "Sui 已授权" else "Shizuku 已授权"
+            binding.tvShellStatusDesc.text = defaultDesc
             binding.tvShellStatusDesc.setTextColor(colorContainer)
             binding.shellStatusCard.setOnClickListener(null)
-        } else {
-            val colorContainer = MaterialColors.getColor(context, com.google.android.material.R.attr.colorErrorContainer, Color.RED)
-            val onColorContainer = MaterialColors.getColor(context, com.google.android.material.R.attr.colorOnErrorContainer, Color.WHITE)
+            binding.shellStatusCard.isClickable = false
 
-            binding.shellStatusCard.setCardBackgroundColor(colorContainer)
-            binding.ivShellStatusIcon.setImageResource(R.drawable.ic_icon_warning)
-            binding.ivShellStatusIcon.imageTintList = ColorStateList.valueOf(onColorContainer)
-            
-            if (isShizukuAvailable) {
-                binding.tvShellStatusTitle.text = if (isSui) "Sui 未授权" else "Shizuku 未授权"
-                binding.tvShellStatusDesc.text = "点击申请 Shell 授权"
-            } else {
-                binding.tvShellStatusTitle.text = "Shell 服务未运行"
-                binding.tvShellStatusDesc.text = "请启动 Shizuku 或安装 Sui"
+            // 所有的细节检测（Magisk/Sui等）全部放在后台线程，检测到后再更新文案
+            AppExecutor.io().execute {
+                val detailName = if (authType == "Root") {
+                    ShellUtil.getSuManagerName()
+                } else {
+                    "Shell"
+                }
+                activity?.runOnUiThread {
+                    binding.tvShellStatusDesc.text = "$detailName 已授权"
+                }
             }
+        } else {
+            binding.shellStatusCard.setCardBackgroundColor(errorColorContainer(context))
+            binding.ivShellStatusIcon.setImageResource(R.drawable.ic_icon_warning)
+            binding.ivShellStatusIcon.imageTintList = ColorStateList.valueOf(onColorErrorContainer(context))
             
-            binding.tvShellStatusTitle.setTextColor(onColorContainer)
-            binding.tvShellStatusDesc.setTextColor(onColorContainer)
+            binding.tvShellStatusTitle.text = "未授权"
+            binding.tvShellStatusDesc.text = "点击选择授权方式"
+            
+            binding.tvShellStatusTitle.setTextColor(onColorErrorContainer(context))
+            binding.tvShellStatusDesc.setTextColor(onColorErrorContainer(context))
             
             binding.shellStatusCard.setOnClickListener {
-                if (isShizukuAvailable) {
-                    try {
-                        Shizuku.requestPermission(1001)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                showAuthSelectionDialog()
+            }
+        }
+    }
+
+    private fun errorColorContainer(context: android.content.Context) = 
+        MaterialColors.getColor(context, com.google.android.material.R.attr.colorErrorContainer, Color.RED)
+    
+    private fun onColorErrorContainer(context: android.content.Context) = 
+        MaterialColors.getColor(context, com.google.android.material.R.attr.colorOnErrorContainer, Color.WHITE)
+
+    private fun showAuthSelectionDialog() {
+        val items = arrayOf("Root")
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("选择授权方式")
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> requestRoot()
+                }
+            }
+            .show()
+    }
+
+    private fun requestRoot() {
+        AppExecutor.io().execute {
+            val hasRoot = ShellUtil.hasRootPermission()
+            activity?.runOnUiThread {
+                if (hasRoot) {
+                    ModuleConfig.getInstance().apply {
+                        shellAuthType = "Root"
+                        save()
                     }
+                    initShellStatus()
+                    Toast.makeText(context, "Root 授权成功", Toast.LENGTH_SHORT).show()
                 } else {
-                    // 如果连服务都没开启，引导去 Shizuku 官网或提示
-                    try {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/download/"))
-                        startActivity(intent)
-                    } catch (ignored: Exception) {}
+                    Toast.makeText(context, "Root 授权失败或未获得权限", Toast.LENGTH_SHORT).show()
                 }
             }
         }

@@ -62,10 +62,13 @@ Evo-PicCatcher 是一款 Android 图片**自动化**抓取工具。通过 LSPose
 
 ---
 如果有新的功能建议或发现抓不到图的 App，欢迎提交 [Issues](https://github.com/Evo-creative/Evo-PicCatcher/issues)。
-TODO上有的就不要再提交Issues了
+
+TODO里有的就不要再提交Issues了
+
 但是这里不需要手动抓取图片的建议。
 
 ## 开源协议与授权
 
 本项目已获得原作者 **Mingyueyixi** 的正式授权，并使用 **GPL-v3.0** 开源协议。
+
 注意所有分支均使用main分支的开源协议

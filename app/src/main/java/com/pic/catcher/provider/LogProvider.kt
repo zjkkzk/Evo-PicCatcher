@@ -54,6 +54,14 @@ class LogProvider : ContentProvider() {
             Log.d(TAG, "Successfully moved file via shell: $fileName")
             return true
         } else {
+            // 如果执行失败且权限丢失，同步更新配置状态
+            if (!com.pic.catcher.util.RootUtil.hasRootPermission()) {
+                val config = com.pic.catcher.config.ModuleConfig.getInstance()
+                if (config.rootStatus != "DENIED") {
+                    config.rootStatus = "DENIED"
+                    config.save()
+                }
+            }
             Log.e(TAG, "Shell move failed: ${result.stderr}, trying fallback...")
             return try {
                 val cacheFile = File(cachePath)

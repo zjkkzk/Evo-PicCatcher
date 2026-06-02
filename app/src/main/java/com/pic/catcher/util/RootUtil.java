@@ -35,11 +35,29 @@ public class RootUtil {
      * 启动/检查 Root 权限。长连接模式，通常只在启动时触发一次 Magisk Toast。
      */
     public static CheckResult checkRootStatus() {
+        // 探测 su 是否存在，以区分 DENIED 和 NOT_FOUND
+        boolean hasSu = false;
+        try {
+            Process p = Runtime.getRuntime().exec(new String[]{"which", "su"});
+            hasSu = p.waitFor() == 0;
+        } catch (Exception ignored) {
+            hasSu = new java.io.File("/system/bin/su").exists() || new java.io.File("/system/xbin/su").exists();
+        }
+
         boolean authorized = ensureShellSession();
         cachedRootStatus = authorized;
-        // 关键：在建立 Shell 会话后探测，结果更准
         String suName = probeSuManagerName();
-        return new CheckResult(authorized ? Status.AUTHORIZED : Status.DENIED, suName);
+        
+        Status status;
+        if (authorized) {
+            status = Status.AUTHORIZED;
+        } else if (hasSu) {
+            status = Status.DENIED;
+        } else {
+            status = Status.NOT_FOUND;
+        }
+        
+        return new CheckResult(status, suName);
     }
 
     private static boolean ensureShellSession() {
@@ -62,17 +80,20 @@ public class RootUtil {
             shellWriter.flush();
             
             String result = outputReader.readUntil(marker, 25000);
-            return result != null && result.contains("uid=0");
+            boolean authorized = result != null && result.contains("uid=0");
+            cachedRootStatus = authorized;
+            return authorized;
         } catch (Exception e) {
             Log.e(TAG, "Failed to start su session", e);
             closeShellSession();
+            cachedRootStatus = false;
             return false;
         } finally {
             shellLock.unlock();
         }
     }
 
-    private static void closeShellSession() {
+    public static void closeShellSession() {
         try {
             if (shellWriter != null) {
                 shellWriter.write("exit\n");
@@ -99,7 +120,13 @@ public class RootUtil {
             shellWriter.flush();
             
             String output = outputReader.readUntil(marker, 45000);
-            if (output == null) return new RootResult(-1, "", "Timeout");
+            if (output == null) {
+                // 超时或读取失败，可能是进程由于某种原因挂了（比如被拒绝权限）
+                if (shellProcess != null && !shellProcess.isAlive()) {
+                    cachedRootStatus = false;
+                }
+                return new RootResult(-1, "", "Timeout");
+            }
             
             // Marker 后的下一行即为退出码
             String exitCodeLine = outputReader.readLine(2000);

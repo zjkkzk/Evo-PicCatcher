@@ -41,19 +41,18 @@ class HomeFragment : BaseFragment() {
         initStatus()
         initShellStatus()
 
-        // 核心修复：如果配置显示已授权但当前进程尚未连接，静默尝试以刷新状态（特别是 suName）
-        val configInstance = ModuleConfig.getInstance()
-        if (configInstance.rootStatus == "AUTHORIZED" && !RootUtil.hasRootPermission()) {
-            AppExecutor.io().execute {
-                val result = RootUtil.checkRootStatus()
-                if (result.status == RootUtil.Status.AUTHORIZED) {
-                    activity?.runOnUiThread {
-                        if (configInstance.suManagerName != result.suName) {
-                            configInstance.suManagerName = result.suName
-                            configInstance.save()
-                            initShellStatus()
-                        }
-                    }
+        // 每次进入页面都进行一次静默异步检测，确保状态与系统同步（特别是处理撤销权限的情况）
+        AppExecutor.io().execute {
+            val result = RootUtil.checkRootStatus()
+            val configInstance = ModuleConfig.getInstance()
+            
+            // 如果检测到的状态与配置记录不符，则更新
+            if (configInstance.rootStatus != result.status.name || configInstance.suManagerName != result.suName) {
+                configInstance.rootStatus = result.status.name
+                configInstance.suManagerName = result.suName
+                configInstance.save()
+                activity?.runOnUiThread {
+                    initShellStatus()
                 }
             }
         }
@@ -63,19 +62,9 @@ class HomeFragment : BaseFragment() {
         val context = context ?: return
         val configInstance = ModuleConfig.getInstance()
         
-        // 动态探测并保存 SU 名称 (Magisk/KernelSU/APatch)
-        val suName = if (configInstance.suManagerName == "Root" || configInstance.suManagerName.isEmpty()) {
-            val detected = RootUtil.probeSuManagerName()
-            if (detected != configInstance.suManagerName) {
-                configInstance.suManagerName = detected
-                configInstance.save()
-            }
-            detected
-        } else {
-            configInstance.suManagerName
-        }
-        
         val status = configInstance.rootStatus
+        val suName = configInstance.suManagerName.ifEmpty { "Root" }
+        
         val colorTertiaryContainer = MaterialColors.getColor(context, com.google.android.material.R.attr.colorTertiaryContainer, Color.LTGRAY)
         val onColorTertiaryContainer = MaterialColors.getColor(context, com.google.android.material.R.attr.colorOnTertiaryContainer, Color.BLACK)
         val colorErrorContainer = errorColorContainer(context)
@@ -101,16 +90,16 @@ class HomeFragment : BaseFragment() {
                 binding.tvShellStatusDesc.text = when(status) {
                     "DENIED" -> "已拒绝授权"
                     "NOT_FOUND" -> "未找到 SU 环境"
-                    else -> "等待授权"
+                    else -> "点击请求授权"
                 }
                 binding.tvShellStatusDesc.setTextColor(onColorErrorContainer)
             }
         }
 
-        // 解压逻辑：点击仅播放水波纹，不执行操作
         binding.shellStatusCard.isClickable = true
-        binding.shellStatusCard.setOnClickListener { } 
-        // 长按直接触发授权
+        binding.shellStatusCard.setOnClickListener { 
+            requestRoot()
+        }
         binding.shellStatusCard.setOnLongClickListener {
             requestRoot()
             true
@@ -125,6 +114,8 @@ class HomeFragment : BaseFragment() {
 
     private fun requestRoot() {
         AppExecutor.io().execute {
+            // 强制关闭现有会话，确保能重新拉起授权弹窗
+            RootUtil.closeShellSession()
             val result = RootUtil.checkRootStatus()
             activity?.runOnUiThread {
                 val configInstance = ModuleConfig.getInstance()

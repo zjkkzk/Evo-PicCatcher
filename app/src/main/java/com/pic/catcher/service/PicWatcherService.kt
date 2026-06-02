@@ -122,8 +122,20 @@ class PicWatcherService : Service() {
         """.trimIndent()
 
         val result = RootUtil.runCommand(script)
-        if (result.stdout.isNotEmpty()) {
-            Log.d(TAG, result.stdout)
+        if (result.isSuccess) {
+            if (result.stdout.isNotEmpty()) {
+                Log.d(TAG, result.stdout)
+            }
+        } else {
+            // 核心逻辑：如果执行失败且 Root 权限丢失，同步更新配置状态以维持 UI 一致性
+            if (!RootUtil.hasRootPermission()) {
+                val config = ModuleConfig.getInstance()
+                if (config.rootStatus != "DENIED") {
+                    config.rootStatus = "DENIED"
+                    config.save()
+                    Log.w(TAG, "Root permission lost during harvest, updating config to DENIED")
+                }
+            }
         }
     }
 

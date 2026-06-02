@@ -10,7 +10,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import com.google.android.material.color.MaterialColors
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.lu.magic.util.thread.AppExecutor
 import com.pic.catcher.AppBuildInfo
 import com.pic.catcher.BuildConfig
@@ -21,7 +20,6 @@ import com.pic.catcher.config.ModuleConfig
 import com.pic.catcher.databinding.FragmentHomeBinding
 import com.pic.catcher.databinding.ItemInfoRowBinding
 import com.pic.catcher.util.RootUtil
-import android.widget.Toast
 
 class HomeFragment : BaseFragment() {
     private lateinit var binding: FragmentHomeBinding
@@ -112,9 +110,9 @@ class HomeFragment : BaseFragment() {
         // 解压逻辑：点击仅播放水波纹，不执行操作
         binding.shellStatusCard.isClickable = true
         binding.shellStatusCard.setOnClickListener { } 
-        // 长按触发授权选择（防误触）
+        // 长按直接触发授权
         binding.shellStatusCard.setOnLongClickListener {
-            showAuthSelectionDialog()
+            requestRoot()
             true
         }
     }
@@ -125,18 +123,7 @@ class HomeFragment : BaseFragment() {
     private fun onColorErrorContainer(context: android.content.Context) = 
         MaterialColors.getColor(context, com.google.android.material.R.attr.colorOnErrorContainer, Color.WHITE)
 
-    private fun showAuthSelectionDialog() {
-        val items = arrayOf("Root 授权")
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle("手动触发授权")
-            .setItems(items) { _, which ->
-                if (which == 0) requestRoot()
-            }
-            .show()
-    }
-
     private fun requestRoot() {
-        Toast.makeText(context, "正在尝试请求 Root 权限...", Toast.LENGTH_SHORT).show()
         AppExecutor.io().execute {
             val result = RootUtil.checkRootStatus()
             activity?.runOnUiThread {
@@ -145,7 +132,6 @@ class HomeFragment : BaseFragment() {
                 configInstance.suManagerName = result.suName
                 if (result.status == RootUtil.Status.AUTHORIZED) {
                     configInstance.shellAuthType = "Root"
-                    Toast.makeText(context, "授权成功", Toast.LENGTH_SHORT).show()
                 }
                 configInstance.save()
                 initShellStatus()

@@ -10,13 +10,11 @@ import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.AdapterView.OnItemSelectedListener
 import android.widget.ArrayAdapter
-import android.widget.Toast
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import com.google.android.material.color.DynamicColors
-import com.lu.magic.util.ToastUtil
 import com.lu.magic.util.log.LogUtil
 import com.pic.catcher.R
 import com.pic.catcher.adapter.BindingListAdapter
@@ -91,91 +89,91 @@ class ConfigActivity : BindingActivity<ActivityConfigBinding>() {
                     SwitchItem(getString(R.string.config_catch_net_pic), moduleConfig.isCatchNetPic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchNetPic = checked
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                     SwitchItem(getString(R.string.config_catch_webview_pic), moduleConfig.isCatchWebViewPic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchWebViewPic = checked
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                     SwitchItem(getString(R.string.config_catch_glide_pic), moduleConfig.isCatchGlidePic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchGlidePic = checked
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                     SwitchItem(getString(R.string.config_catch_coil_pic), moduleConfig.isCatchCoilPic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchCoilPic = checked
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                     SwitchItem(getString(R.string.config_catch_fresco_pic), moduleConfig.isCatchFrescoPic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchFrescoPic = checked
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                     SwitchItem(getString(R.string.config_catch_bitmap_pic), moduleConfig.isCatchBitmapPic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchBitmapPic = checked
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                     SwitchItem(getString(R.string.config_catch_imagedecoder_pic), moduleConfig.isCatchImageDecoderPic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchImageDecoderPic = checked
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                     SwitchItem(getString(R.string.config_catch_native_bitmap_pic), moduleConfig.isCatchNativeBitmapPic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchNativeBitmapPic = checked
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                     SwitchItem(getString(R.string.config_catch_rendernode_pic), moduleConfig.isCatchRenderNodePic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchRenderNodePic = checked
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                     SwitchItem(getString(R.string.config_catch_canvas_pic), moduleConfig.isCatchCanvasPic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchCanvasPic = checked
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                     SwitchItem(getString(R.string.config_catch_surface_pic), moduleConfig.isCatchSurfacePic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchSurfacePic = checked
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                     SwitchItem(getString(R.string.config_catch_drawable_pic), moduleConfig.isCatchDrawablePic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchDrawablePic = checked
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                     SwitchItem(getString(R.string.config_catch_imageview_pic), moduleConfig.isCatchImageViewPic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchImageViewPic = checked
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                     SwitchItem(getString(R.string.config_catch_file_pic), moduleConfig.isCatchFilePic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchFilePic = checked
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                     SwitchItem(getString(R.string.config_catch_movie_pic), moduleConfig.isCatchMoviePic).apply {
                         addPropertyChangeListener {
                             moduleConfig.isCatchMoviePic = checked
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                     SwitchItem(
@@ -188,7 +186,7 @@ class ConfigActivity : BindingActivity<ActivityConfigBinding>() {
                                 moduleConfig.isSaveToInternal = checked
                                 desc = if (checked) getString(R.string.config_save_to_internal_on) else getString(R.string.config_save_to_internal_off)
                                 mAdapter.notifyDataSetChanged()
-                                showUpdatedToast()
+                                moduleConfig.save()
                             }
                         }
                     },
@@ -199,7 +197,7 @@ class ConfigActivity : BindingActivity<ActivityConfigBinding>() {
                     ).apply {
                         addPropertyChangeListener {
                             moduleConfig.minSpaceSize = value.toIntElse(0)
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                     SpinnerItem(
@@ -209,18 +207,13 @@ class ConfigActivity : BindingActivity<ActivityConfigBinding>() {
                     ).apply {
                         addPropertyChangeListener {
                             moduleConfig.picDefaultSaveFormat = picFormatList[selectedIndex]
-                            showUpdatedToast()
+                            moduleConfig.save()
                         }
                     },
                 )
             )
         }
         mBinding.listView.adapter = mAdapter
-    }
-
-    private fun showUpdatedToast() {
-        Toast.makeText(this, getString(R.string.toast_settings_updated), Toast.LENGTH_SHORT).show()
-        moduleConfig.save()
     }
 
     override fun onDestroy() {

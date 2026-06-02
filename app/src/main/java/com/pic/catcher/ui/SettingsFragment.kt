@@ -9,7 +9,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
-import android.widget.Toast
 import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.content.res.ColorStateList
@@ -58,7 +57,6 @@ class SettingsFragment : BaseFragment() {
         binding.toolbar.setOnMenuItemClickListener {
             if (it.itemId == R.id.action_refresh) {
                 refreshConfigUI()
-                Toast.makeText(context, "已刷新配置", Toast.LENGTH_SHORT).show()
                 true
             } else false
         }
@@ -67,12 +65,6 @@ class SettingsFragment : BaseFragment() {
             val item = mAdapter.getItem(position)
             if (item is GroupItem) {
                 toggleCatcherGroup(item, position)
-            } else if (item is TextItem && item.name == "授权状态") {
-                if (RootUtil.hasRootPermission()) {
-                    Toast.makeText(context, "Root 权限正常", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(context, "请前往首页点击“激活”或“申请权限”", Toast.LENGTH_SHORT).show()
-                }
             }
         }
 
@@ -314,8 +306,6 @@ class SettingsFragment : BaseFragment() {
 
         updateConfig()
         refreshConfigUI()
-        val status = if (targetState) "已开启" else "已关闭"
-        Toast.makeText(context, "${getPresetName(level)}$status", Toast.LENGTH_SHORT).show()
     }
 
     private fun getPresetName(level: QuickPresetItem.PresetLevel) = when (level) {
@@ -626,8 +616,6 @@ class SettingsFragment : BaseFragment() {
                                     animateButtonState(holder.btnResolutionPreview, false, colorPrimary, colorOnPrimary)
                                 }
                             }
-                        } else {
-                            Toast.makeText(context, "请输入有效的宽高", Toast.LENGTH_SHORT).show()
                         }
                     }
                 }

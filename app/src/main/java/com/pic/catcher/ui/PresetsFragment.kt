@@ -6,7 +6,6 @@ import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.pic.catcher.R
@@ -93,8 +92,6 @@ class PresetsFragment : BaseFragment() {
         // 3. 同步对象状态并持久化
         config.updateFrom(source)
         config.save()
-
-        Toast.makeText(context, getString(R.string.presets_applied_toast, preset.name) + "\n" + getString(R.string.toast_plugin_config_change_tip), Toast.LENGTH_LONG).show()
     }
 
     inner class PresetsAdapter(

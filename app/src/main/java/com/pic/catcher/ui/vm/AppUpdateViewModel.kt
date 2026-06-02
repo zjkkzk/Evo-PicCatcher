@@ -1,9 +1,7 @@
 package com.pic.catcher.ui.vm
 
-import android.app.AlertDialog
 import android.content.Context
 import com.lu.magic.util.AppUtil
-import com.lu.magic.util.ToastUtil
 import com.lu.magic.util.log.LogUtil
 import com.pic.catcher.R
 import com.pic.catcher.base.BaseViewModel
@@ -26,20 +24,9 @@ class AppUpdateViewModel : BaseViewModel() {
                 hasOnCheckAction = false
                 return@checkUpdate
             }
-            AlertDialog.Builder(context)
-                .setTitle(R.string.app_update_dialog_title)
-                .setMessage(context.getString(R.string.app_update_confirm_tip_format, name))
-                .setNegativeButton(android.R.string.cancel, null)
-                .setNeutralButton(android.R.string.ok) { _, _ ->
-                    openBrowserDownloadUrl(context, url)
-                }
-                .setPositiveButton(R.string.app_update_not_tip) { _, _ ->
-                    AppUpdateCheckUtil.setCheckFlagOnEnter(false)
-                }
-                .setOnDismissListener {
-                    hasOnCheckAction = false
-                }
-                .show()
+            // 自动打开浏览器下载，不再弹窗询问
+            openBrowserDownloadUrl(context, url)
+            hasOnCheckAction = false
         }
     }
 
@@ -51,19 +38,11 @@ class AppUpdateViewModel : BaseViewModel() {
         AppUpdateCheckUtil.checkUpdate { url, name, err ->
             if (url.isBlank() || name.isBlank()) {
                 hasOnCheckAction = false
-                ToastUtil.show(fallBackText)
                 return@checkUpdate
             }
-            AlertDialog.Builder(context)
-                .setMessage(context.getString(R.string.app_update_confirm_tip_format, name))
-                .setNegativeButton(android.R.string.cancel, null)
-                .setNeutralButton(android.R.string.ok) { _, _ ->
-                    openBrowserDownloadUrl(context, url)
-                }
-                .setOnDismissListener {
-                    hasOnCheckAction = false
-                }
-                .show()
+            // 自动打开浏览器下载
+            openBrowserDownloadUrl(context, url)
+            hasOnCheckAction = false
         }
     }
 
@@ -71,7 +50,6 @@ class AppUpdateViewModel : BaseViewModel() {
         try {
             AppRouter.route(context, url)
         } catch (e: Exception) {
-            ToastUtil.show(context.getString(R.string.app_toast_open_download_url_fail))
             LogUtil.w(e)
         }
     }

@@ -7,6 +7,7 @@ import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.animation.ArgbEvaluator
@@ -56,6 +57,7 @@ class SettingsFragment : BaseFragment() {
         binding.toolbar.inflateMenu(R.menu.menu_settings)
         binding.toolbar.setOnMenuItemClickListener {
             if (it.itemId == R.id.action_refresh) {
+                startRefreshAnimation()
                 refreshConfigUI()
                 true
             } else false
@@ -76,6 +78,15 @@ class SettingsFragment : BaseFragment() {
         if (!hidden && isAdded) {
             refreshConfigUI()
         }
+    }
+
+    private fun startRefreshAnimation() {
+        val view = binding.toolbar.findViewById<View>(R.id.action_refresh) ?: return
+        view.animate()
+            .rotationBy(360f)
+            .setDuration(800)
+            .setInterpolator(AccelerateDecelerateInterpolator())
+            .start()
     }
 
     private fun refreshConfigUI() {
@@ -217,7 +228,7 @@ class SettingsFragment : BaseFragment() {
             "AUTHORIZED" -> "${moduleConfig.suManagerName} 已授权"
             "DENIED" -> "已拒绝 (${moduleConfig.suManagerName})"
             "NOT_FOUND" -> "Root 未授权"
-            else -> "未授权 (请到首页授权)"
+            else -> "未授权 (请到主页授权)"
         }
         items.add(TextItem("授权状态", authStatus))
 

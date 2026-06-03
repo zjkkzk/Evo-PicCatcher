@@ -55,7 +55,7 @@ class MainActivity : BaseActivity() {
             }
             true
         }
-        // 默认选中首页
+        // 默认选中主页
         if (supportFragmentManager.fragments.isEmpty()) {
             binding.bottomNavigation.selectedItemId = R.id.nav_home
         }

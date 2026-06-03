@@ -61,7 +61,19 @@ public class RootUtil {
     }
 
     private static boolean ensureShellSession() {
-        if (shellProcess != null && shellProcess.isAlive()) return true;
+        if (shellProcess != null && shellProcess.isAlive()) {
+            // 即便进程存活，也验证一下是否真的还能跑命令（处理权限被中途撤销的情况）
+            try {
+                String marker = "LIVE_CHECK_" + System.currentTimeMillis();
+                shellWriter.write("echo " + marker + "\n");
+                shellWriter.flush();
+                if (outputReader.readUntil(marker, 1000) != null) {
+                    return true;
+                }
+            } catch (Exception e) {
+                closeShellSession();
+            }
+        }
         
         shellLock.lock();
         try {
@@ -94,16 +106,25 @@ public class RootUtil {
     }
 
     public static void closeShellSession() {
+        shellLock.lock();
         try {
             if (shellWriter != null) {
-                shellWriter.write("exit\n");
-                shellWriter.flush();
-                shellWriter.close();
+                try {
+                    shellWriter.write("exit\n");
+                    shellWriter.flush();
+                    shellWriter.close();
+                } catch (Exception ignored) {}
             }
             if (outputReader != null) outputReader.stop();
             if (shellProcess != null) shellProcess.destroy();
-        } catch (Exception ignored) {}
-        shellWriter = null; outputReader = null; shellProcess = null;
+            
+            shellWriter = null; 
+            outputReader = null; 
+            shellProcess = null;
+            cachedRootStatus = null; 
+        } finally {
+            shellLock.unlock();
+        }
     }
 
     /**
@@ -203,6 +224,10 @@ public class RootUtil {
                         }
                     }
                 } catch (IOException ignored) {}
+                running = false; // 进程结束或读取异常时，立即停止运行
+                synchronized (buffer) {
+                    buffer.notifyAll(); // 唤醒所有正在等待 readUntil 的线程
+                }
             }, "ShellReader");
             thread.start();
         }
@@ -216,6 +241,8 @@ public class RootUtil {
             long deadline = System.currentTimeMillis() + timeoutMillis;
             synchronized (buffer) {
                 while (System.currentTimeMillis() < deadline) {
+                    if (!running) return null; // 进程已死，停止等待
+                    
                     int index = buffer.indexOf(marker);
                     if (index != -1) {
                         String result = buffer.substring(0, index);
@@ -224,7 +251,7 @@ public class RootUtil {
                         return result;
                     }
                     try {
-                        buffer.wait(500);
+                        buffer.wait(200); // 缩短轮询间隔，提高响应速度
                     } catch (InterruptedException e) {
                         return null;
                     }

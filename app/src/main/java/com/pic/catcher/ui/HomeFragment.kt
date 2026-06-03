@@ -9,6 +9,10 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.Animation
+import android.view.animation.LinearInterpolator
+import android.view.animation.RotateAnimation
+import android.view.animation.AccelerateDecelerateInterpolator
 import com.google.android.material.color.MaterialColors
 import com.lu.magic.util.thread.AppExecutor
 import com.pic.catcher.AppBuildInfo
@@ -32,8 +36,22 @@ class HomeFragment : BaseFragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        setupToolbar()
         initInfo()
         initGithub()
+    }
+
+    private fun setupToolbar() {
+        binding.toolbar.inflateMenu(R.menu.menu_settings)
+        binding.toolbar.setOnMenuItemClickListener { item ->
+            if (item.itemId == R.id.action_refresh) {
+                item.isEnabled = false
+                requestRoot()
+                true
+            } else {
+                false
+            }
+        }
     }
 
     override fun onResume() {
@@ -113,18 +131,34 @@ class HomeFragment : BaseFragment() {
         MaterialColors.getColor(context, com.google.android.material.R.attr.colorOnErrorContainer, Color.WHITE)
 
     private fun requestRoot() {
+        // 1. 立即提供视觉反馈，让用户知道“刷新”已经开始
+        startRefreshAnimation()
+        binding.tvShellStatusDesc.text = "正在检测..."
+        binding.tvShellStatusTitle.text = "请稍候"
+        binding.shellStatusCard.alpha = 0.6f // 增加半透明效果表示正在忙碌
+        binding.shellStatusCard.isEnabled = false 
+        
         AppExecutor.io().execute {
-            // 强制关闭现有会话，确保能重新拉起授权弹窗
+            // 2. 强制关闭旧会话并彻底清除所有状态缓存
             RootUtil.closeShellSession()
+            
+            // 3. 执行实测（这会真正重新向系统申请权限）
             val result = RootUtil.checkRootStatus()
+            
+            val configInstance = ModuleConfig.getInstance()
+            configInstance.rootStatus = result.status.name
+            configInstance.suManagerName = result.suName
+            if (result.status == RootUtil.Status.AUTHORIZED) {
+                configInstance.shellAuthType = "Root"
+            }
+            configInstance.save()
+            
+            // 4. 回到主线程刷新，稍微延时一点点让用户能看清状态切换
+            Thread.sleep(400) 
             activity?.runOnUiThread {
-                val configInstance = ModuleConfig.getInstance()
-                configInstance.rootStatus = result.status.name
-                configInstance.suManagerName = result.suName
-                if (result.status == RootUtil.Status.AUTHORIZED) {
-                    configInstance.shellAuthType = "Root"
-                }
-                configInstance.save()
+                binding.toolbar.menu.findItem(R.id.action_refresh)?.isEnabled = true
+                binding.shellStatusCard.alpha = 1.0f
+                binding.shellStatusCard.isEnabled = true
                 initShellStatus()
             }
         }
@@ -188,5 +222,18 @@ class HomeFragment : BaseFragment() {
                 startActivity(intent)
             } catch (e: Exception) { }
         }
+    }
+
+    private fun startRefreshAnimation() {
+        val view = binding.toolbar.findViewById<View>(R.id.action_refresh) ?: return
+        view.animate()
+            .rotationBy(360f)
+            .setDuration(800)
+            .setInterpolator(AccelerateDecelerateInterpolator())
+            .start()
+    }
+
+    private fun stopRefreshAnimation() {
+        // 动画会自动完成一圈，无需手动停止
     }
 }

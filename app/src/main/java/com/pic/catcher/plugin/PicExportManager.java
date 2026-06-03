@@ -101,11 +101,6 @@ public class PicExportManager {
     public void exportBitmap(Bitmap bitmap) {
         if (bitmap == null || bitmap.isRecycled()) return;
         
-        // 去重过滤
-        int identity = System.identityHashCode(bitmap);
-        if (mProcessedIdCache.get(identity) != null) return;
-        mProcessedIdCache.put(identity, true);
-
         sWorker.execute(() -> {
             try {
                 if (bitmap.isRecycled()) return;
@@ -119,13 +114,10 @@ public class PicExportManager {
                     bitmap.compress(cf, quality, bos);
                     byte[] bytes = bos.toByteArray();
                     
-                    // 仅使用配置中的过滤
                     if (ModuleConfig.isLessThanMinSize((long) bytes.length)) return;
                     if (ModuleConfig.isLessThanMinResolution(bitmap.getWidth(), bitmap.getHeight())) return;
                     
-                    // 优化：使用简单的 Hash 配合长度代替 MD5，减少 CPU 占用
-                    String fileName = Integer.toHexString(bitmap.hashCode()) + "_" + bytes.length + "." + format;
-                    writeToHostCache(bytes, fileName);
+                    exportByteArrayInternal(bytes, format);
                 }
             } catch (Throwable ignored) {}
         });
@@ -134,29 +126,9 @@ public class PicExportManager {
     /**
      * 导出字节数组 (通用)
      */
-    public void exportByteArray(final byte[] dataBytes, String lastName) {
+    public void exportByteArray(final byte[] dataBytes, String suffix) {
         if (dataBytes == null) return;
-        if (ModuleConfig.isLessThanMinSize((long) dataBytes.length)) return;
-
-        // 分辨率过滤
-        int[] dimen = PicUtil.getImageDimensions(dataBytes);
-        if (dimen != null && ModuleConfig.isLessThanMinResolution(dimen[0], dimen[1])) {
-            return;
-        }
-        
-        int identity = System.identityHashCode(dataBytes);
-        if (mProcessedIdCache.get(identity) != null) return;
-        mProcessedIdCache.put(identity, true);
-
-        sWorker.execute(() -> {
-            try {
-                String suffix = TextUtils.isEmpty(lastName) ? PicUtil.detectImageType(dataBytes, "bin") : lastName;
-                if (!suffix.startsWith(".")) suffix = "." + suffix;
-                // 快速生成文件名
-                String fileName = "raw_" + System.identityHashCode(dataBytes) + "_" + dataBytes.length + suffix;
-                writeToHostCache(dataBytes, fileName);
-            } catch (Throwable ignored) {}
-        });
+        sWorker.execute(() -> exportByteArrayInternal(dataBytes, suffix));
     }
 
     public void exportBitmapFile(File file) {

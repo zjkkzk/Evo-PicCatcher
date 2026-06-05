@@ -359,6 +359,18 @@ class SettingsFragment : BaseFragment() {
 
     private fun toggleCatcherGroup(group: GroupItem, position: Int) {
         group.isExpanded = !group.isExpanded
+        
+        // 极简方案：使用极短时长（150ms）和加速插值器，消除位移带来的“粘滞感”和“奇怪感”
+        // 这种快闪式的淡入在 MD3 中常用于列表项的局部刷新
+        val transition = androidx.transition.TransitionSet().apply {
+            ordering = androidx.transition.TransitionSet.ORDERING_TOGETHER
+            addTransition(androidx.transition.Fade(androidx.transition.Fade.IN).setDuration(150))
+            interpolator = android.view.animation.AccelerateInterpolator()
+        }
+        
+        // 锁定在 ListView 内部，确保布局变化干脆利落
+        androidx.transition.TransitionManager.beginDelayedTransition(binding.listView, transition)
+
         refreshConfigUI()
     }
 
@@ -516,10 +528,15 @@ class SettingsFragment : BaseFragment() {
                 is GroupItem -> {
                     val holder = vh.binding as ItemConfigGroupBinding
                     holder.groupTitle.text = item.title
-                    holder.groupIndicator.animate()
-                        .rotation(if (item.isExpanded) 180f else 0f)
-                        .setDuration(300)
-                        .start()
+                    // 配合列表展开，同步执行箭头的平滑旋转
+                    val targetRotation = if (item.isExpanded) 180f else 0f
+                    if (holder.groupIndicator.rotation != targetRotation) {
+                        holder.groupIndicator.animate()
+                            .rotation(targetRotation)
+                            .setDuration(250)
+                            .setInterpolator(android.view.animation.DecelerateInterpolator())
+                            .start()
+                    }
                 }
                 is SwitchItem -> {
                     val holder = vh.binding as ItemConfigSwitchBinding

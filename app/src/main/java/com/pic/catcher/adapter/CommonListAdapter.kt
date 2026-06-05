@@ -72,7 +72,26 @@ abstract class CommonListAdapter<E, VH : AbsListAdapter.ViewHolder> : AbsListAda
     }
 
     override fun getItemId(position: Int): Long {
-        return position.toLong()
+        val item = getItem(position) ?: return position.toLong()
+        // 建立基于业务语义的唯一指纹。即使列表重新构建，只要标题没变，ID 就保持一致。
+        // 这能让 TransitionManager 准确追踪到视图的移动轨迹，消除闪烁和乱飞。
+        val identity = when (item) {
+            is com.pic.catcher.bean.GroupItem -> "G_" + item.title
+            is com.pic.catcher.bean.SwitchItem -> "S_" + item.title
+            is com.pic.catcher.bean.TextItem -> "T_" + item.name
+            is com.pic.catcher.bean.EditItem -> "E_" + item.name
+            is com.pic.catcher.bean.SliderItem -> "SL_" + item.title
+            is com.pic.catcher.bean.SpinnerItem -> "SP_" + item.title
+            is com.pic.catcher.bean.NoMediaItem -> "NM_" + item.title
+            is com.pic.catcher.bean.ResolutionItem -> "R_" + item.title
+            is com.pic.catcher.bean.QuickPresetItem -> "QP"
+            else -> item.javaClass.simpleName + "_" + position
+        }
+        return identity.hashCode().toLong()
+    }
+
+    override fun hasStableIds(): Boolean {
+        return true
     }
 
 }

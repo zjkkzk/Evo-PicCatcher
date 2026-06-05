@@ -50,8 +50,9 @@ class MainActivity : BaseActivity() {
         binding.bottomNavigation.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.nav_home -> switchFragment(HomeFragment::class.java)
-                R.id.nav_settings -> switchFragment(SettingsFragment::class.java)
+                R.id.nav_storage -> switchFragment(StorageFragment::class.java)
                 R.id.nav_presets -> switchFragment(PresetsFragment::class.java)
+                R.id.nav_settings -> switchFragment(SettingsFragment::class.java)
             }
             true
         }

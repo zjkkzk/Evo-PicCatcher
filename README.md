@@ -43,9 +43,9 @@ Evo-PicCatcher 是一款 Android 图片**自动化**抓取工具。通过 LSPose
 
 ## 页面展示
 
-| 首页 | 设置 | 设置 (拦截开关) | 应用预设 |
+| 主页 | 设置 | 设置 (拦截开关) | 应用预设 |
 |--------|--------|--------|--------|
-| ![首页](./images/mainpage.png) | ![设置](./images/settings.png) | ![设置](./images/settings_full.png) | ![应用预设](./images/preset.png)|
+| ![主页](./images/mainpage.png) | ![设置](./images/settings.png) | ![设置](./images/settings_full.png) | ![应用预设](./images/preset.png)|
 
 ## 隐私与安全说明
 

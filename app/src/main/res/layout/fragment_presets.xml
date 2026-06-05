@@ -16,7 +16,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:minHeight="?attr/actionBarSize"
-            app:title="应用预设"
+            app:title="@string/presets_title"
             app:subtitle="根据应用一键开启推荐开关"
             app:titleTextAppearance="@style/TextAppearance.Material3.TitleLarge"
             app:subtitleTextAppearance="@style/TextAppearance.Material3.LabelSmall"

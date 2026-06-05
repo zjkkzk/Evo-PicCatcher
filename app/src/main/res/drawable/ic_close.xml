@@ -1,0 +1,10 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <!-- 使用 MD3 Rounded 风格的路径，线条更粗壮有力 (wght 700 效果) -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M256,768Q243,768 233.5,758.5Q224,749 224,736Q224,723 233.5,713.5L432,515L233.5,316.5Q224,307 224,294Q224,281 233.5,271.5Q243,262 256,262Q269,262 278.5,271.5L477,470L675.5,271.5Q685,262 698,262Q711,262 720.5,271.5Q730,281 730,294Q730,307 720.5,316.5L522,515L720.5,713.5Q730,723 730,736Q730,749 720.5,758.5Q711,768 698,768Q685,768 675.5,758.5L477,560L278.5,758.5Q269,768 256,768Z" />
+</vector>

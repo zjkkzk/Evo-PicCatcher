@@ -271,9 +271,19 @@ class ConfigActivity : BindingActivity<ActivityConfigBinding>() {
                 is EditItem -> {
                     val holder = vh.binding as ItemConfigEditBinding
                     holder.itemTitle.text = item.name
-                    holder.itemEdit.inputType = item.inputType
-                    holder.itemEdit.setText(item.value)
                     
+                    if (holder.itemEdit.inputType != item.inputType) {
+                        holder.itemEdit.inputType = item.inputType
+                    }
+
+                    val newValue = item.value ?: ""
+                    if (holder.itemEdit.text.toString() != newValue) {
+                        holder.itemEdit.setText(newValue)
+                        if (holder.itemEdit.hasFocus()) {
+                            holder.itemEdit.setSelection(newValue.length)
+                        }
+                    }
+
                     val oldWatcher = holder.itemEdit.getTag(R.id.tag_text_watcher) as? TextWatcher
                     holder.itemEdit.removeTextChangedListener(oldWatcher)
                     
@@ -281,11 +291,23 @@ class ConfigActivity : BindingActivity<ActivityConfigBinding>() {
                         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
                         override fun afterTextChanged(s: Editable?) {
-                            item.value = s?.toString()
+                            val str = s?.toString()
+                            if (item.value != str) {
+                                item.value = str
+                            }
                         }
                     }
                     holder.itemEdit.setTag(R.id.tag_text_watcher, textWatcher)
                     holder.itemEdit.addTextChangedListener(textWatcher)
+
+                    holder.itemEdit.setOnFocusChangeListener { _, hasFocus ->
+                        if (hasFocus) {
+                            val text = holder.itemEdit.text
+                            if (text != null) {
+                                holder.itemEdit.setSelection(text.length)
+                            }
+                        }
+                    }
                 }
 
                 is SpinnerItem -> {

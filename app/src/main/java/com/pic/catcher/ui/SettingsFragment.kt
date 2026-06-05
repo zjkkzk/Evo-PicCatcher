@@ -16,6 +16,8 @@ import android.content.res.ColorStateList
 import androidx.transition.TransitionManager
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.slider.Slider
+import com.lu.magic.util.ToastUtil
+import com.lu.magic.util.thread.AppExecutor
 import com.pic.catcher.R
 import com.pic.catcher.adapter.BindingListAdapter
 import com.pic.catcher.base.BaseFragment
@@ -193,6 +195,11 @@ class SettingsFragment : BaseFragment() {
 
         // 插入“图片保存”标题
         items.add(TextItem(getString(R.string.config_header_save_settings)))
+        
+        // 查找旧列表中的焦点状态（包括 ResolutionItem 和可能的 EditItem）
+        val oldResolutionItem = mAdapter.getData().find { it is ResolutionItem } as? ResolutionItem
+        val resolutionFocusedId = oldResolutionItem?.focusedFieldId ?: 0
+        
         items.add(
             SwitchItem(
                 getString(R.string.config_save_to_internal),
@@ -210,10 +217,33 @@ class SettingsFragment : BaseFragment() {
             }
         )
         items.add(
-            SwitchItem(
+            NoMediaItem(
                 getString(R.string.config_generate_nomedia),
                 moduleConfig.isGenerateNoMedia,
-                getString(R.string.config_generate_nomedia_desc)
+                getString(R.string.config_generate_nomedia_desc),
+                onGenerate = {
+                    AppExecutor.io().execute {
+                        try {
+                            val path = "/storage/emulated/0/Pictures/PicCatcher"
+                            // 创建目录并将外部路径内容写入 .nomedia 文件
+                            RootUtil.runCommand("mkdir -p \"$path\" && echo \"$path/\" > \"$path/.nomedia\"")
+                            android.util.Log.d("PicCatcher", "Generated .nomedia at: $path")
+                        } catch (e: Exception) {
+                            android.util.Log.e("PicCatcher", "Failed to generate .nomedia", e)
+                        }
+                    }
+                },
+                onRemove = {
+                    AppExecutor.io().execute {
+                        try {
+                            val path = "/storage/emulated/0/Pictures/PicCatcher"
+                            RootUtil.runCommand("rm -f \"$path/.nomedia\"")
+                            android.util.Log.d("PicCatcher", "Removed .nomedia from: $path")
+                        } catch (e: Exception) {
+                            android.util.Log.e("PicCatcher", "Failed to remove .nomedia", e)
+                        }
+                    }
+                }
             ).apply {
                 addPropertyChangeListener {
                     if ("checked" == it.propertyName) {
@@ -241,6 +271,7 @@ class SettingsFragment : BaseFragment() {
                 addPropertyChangeListener { moduleConfig.minSpaceSize = value.toIntElse(0); updateConfig() }
             },
             ResolutionItem(getString(R.string.config_min_resolution), resWidth, resHeight).apply {
+                focusedFieldId = resolutionFocusedId
                 onResolutionChanged { w, h ->
                     moduleConfig.minResolution = "${w.ifEmpty { "0" }}x${h.ifEmpty { "0" }}"
                     updateConfig()
@@ -380,7 +411,7 @@ class SettingsFragment : BaseFragment() {
     }
 
     inner class ConfigListAdapter : BindingListAdapter<ItemType>() {
-        override fun getViewTypeCount(): Int = 8
+        override fun getViewTypeCount(): Int = 9
         override fun getItemViewType(position: Int): Int {
             val item = getItem(position) ?: return ItemType.TYPE_TEXT
             return when (item) {
@@ -391,6 +422,7 @@ class SettingsFragment : BaseFragment() {
                 is GroupItem -> ItemType.TYPE_GROUP
                 is QuickPresetItem -> ItemType.TYPE_QUICK_PRESET
                 is ResolutionItem -> ItemType.TYPE_RESOLUTION
+                is NoMediaItem -> ItemType.TYPE_NOMEDIA
                 else -> ItemType.TYPE_TEXT
             }
         }
@@ -403,6 +435,7 @@ class SettingsFragment : BaseFragment() {
             ItemType.TYPE_GROUP -> BindingHolder(ItemConfigGroupBinding.inflate(layoutInflater, parent, false))
             ItemType.TYPE_QUICK_PRESET -> BindingHolder(ItemConfigQuickPresetBinding.inflate(layoutInflater, parent, false))
             ItemType.TYPE_RESOLUTION -> BindingHolder(ItemConfigResolutionBinding.inflate(layoutInflater, parent, false))
+            ItemType.TYPE_NOMEDIA -> BindingHolder(ItemConfigNomediaBinding.inflate(layoutInflater, parent, false))
             else -> BindingHolder(ItemConfigTextBinding.inflate(layoutInflater, parent, false))
         }
 
@@ -497,6 +530,16 @@ class SettingsFragment : BaseFragment() {
                     holder.itemSwitch.isChecked = item.checked
                     holder.itemSwitch.setOnCheckedChangeListener { _, isChecked -> item.checked = isChecked }
                 }
+                is NoMediaItem -> {
+                    val holder = vh.binding as ItemConfigNomediaBinding
+                    holder.itemTitle.text = item.title
+                    holder.itemDesc.text = item.desc
+                    holder.itemSwitch.setOnCheckedChangeListener(null)
+                    holder.itemSwitch.isChecked = item.checked
+                    holder.itemSwitch.setOnCheckedChangeListener { _, isChecked -> item.checked = isChecked }
+                    holder.btnGenerate.setOnClickListener { item.onGenerate?.invoke() }
+                    holder.btnRemove.setOnClickListener { item.onRemove?.invoke() }
+                }
                 is EditItem -> {
                     val holder = vh.binding as ItemConfigEditBinding
                     holder.itemTitle.text = item.name
@@ -532,7 +575,7 @@ class SettingsFragment : BaseFragment() {
                     holder.itemEdit.addTextChangedListener(textWatcher)
 
                     // 增加焦点监听，确保点击时也能把光标移到最后
-                    holder.itemEdit.setOnFocusChangeListener { _, hasFocus ->
+                    holder.itemEdit.setOnFocusChangeListener { v, hasFocus ->
                         if (hasFocus) {
                             val text = holder.itemEdit.text
                             if (text != null) {
@@ -545,7 +588,13 @@ class SettingsFragment : BaseFragment() {
                     val holder = vh.binding as ItemConfigResolutionBinding
                     holder.itemTitle.text = item.title
 
-                    // 初始化文本并避免光标重置
+                    // 1. 先彻底移除旧监听器，防止 setText 触发回环
+                    val oldWidthWatcher = holder.editWidth.getTag(R.id.tag_text_watcher) as? TextWatcher
+                    holder.editWidth.removeTextChangedListener(oldWidthWatcher)
+                    val oldHeightWatcher = holder.editHeight.getTag(R.id.tag_text_watcher) as? TextWatcher
+                    holder.editHeight.removeTextChangedListener(oldHeightWatcher)
+
+                    // 2. 只有在值确实不同时才更新 UI，并保护焦点
                     if (holder.editWidth.text.toString() != item.width) {
                         holder.editWidth.setText(item.width)
                     }
@@ -553,9 +602,34 @@ class SettingsFragment : BaseFragment() {
                         holder.editHeight.setText(item.height)
                     }
 
-                    // 宽度监听
-                    val oldWidthWatcher = holder.editWidth.getTag(R.id.tag_text_watcher) as? TextWatcher
-                    holder.editWidth.removeTextChangedListener(oldWidthWatcher)
+                    // 3. 焦点管理：监听焦点变化并记录
+                    val commonFocusListener = View.OnFocusChangeListener { v, hasFocus ->
+                        if (hasFocus && v is android.widget.EditText) {
+                            item.focusedFieldId = v.id
+                            v.setSelection(v.text?.length ?: 0)
+                        } else if (!holder.editWidth.hasFocus() && !holder.editHeight.hasFocus()) {
+                            // 只有当两者都失去焦点时，才考虑清除（但由于重排布导致的失去焦点不应清除）
+                            // 简单处理：仅在主动切换到其他 Item 时通过其他方式清除，这里不轻易设为 0
+                        }
+                    }
+                    holder.editWidth.onFocusChangeListener = commonFocusListener
+                    holder.editHeight.onFocusChangeListener = commonFocusListener
+
+                    // 4. 焦点恢复逻辑 (移到监听器设置之后，并增加延时以应对布局抖动)
+                    if (item.focusedFieldId != 0) {
+                        val viewToFocus = if (item.focusedFieldId == R.id.editWidth) holder.editWidth else holder.editHeight
+                        if (!viewToFocus.hasFocus()) {
+                            viewToFocus.postDelayed({
+                                // 再次检查 Fragment 是否还在，防止异步回调导致崩溃
+                                if (isAdded && !viewToFocus.hasFocus()) {
+                                    viewToFocus.requestFocus()
+                                    viewToFocus.setSelection(viewToFocus.text?.length ?: 0)
+                                }
+                            }, 100)
+                        }
+                    }
+
+                    // 5. 定义并绑定新监听器
                     val widthWatcher = object : TextWatcher {
                         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -563,16 +637,15 @@ class SettingsFragment : BaseFragment() {
                             val str = s?.toString() ?: ""
                             if (item.width != str) {
                                 item.width = str
-                                item.notifyChanged()
+                                // 注意：此处不主动调用 refreshConfigUI() 或 notifyDataSetChanged()
+                                // 这样就不会触发整个列表刷新导致焦点丢失
+                                item.notifyChanged() 
                             }
                         }
                     }
                     holder.editWidth.addTextChangedListener(widthWatcher)
                     holder.editWidth.setTag(R.id.tag_text_watcher, widthWatcher)
 
-                    // 高度监听
-                    val oldHeightWatcher = holder.editHeight.getTag(R.id.tag_text_watcher) as? TextWatcher
-                    holder.editHeight.removeTextChangedListener(oldHeightWatcher)
                     val heightWatcher = object : TextWatcher {
                         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -587,13 +660,26 @@ class SettingsFragment : BaseFragment() {
                     holder.editHeight.addTextChangedListener(heightWatcher)
                     holder.editHeight.setTag(R.id.tag_text_watcher, heightWatcher)
 
-                    // 交换按钮逻辑
+                    // 6. 交换逻辑 (带旋转动画)
                     holder.btnSwap.setOnClickListener {
+                        // 1. 执行旋转动画 (顺时针旋转 90 度)
+                        holder.btnSwap.animate()
+                            .rotationBy(90f)
+                            .setDuration(300)
+                            .start()
+
+                        // 2. 交换值
                         val temp = item.width
                         item.width = item.height
                         item.height = temp
+                        
+                        holder.editWidth.removeTextChangedListener(widthWatcher)
+                        holder.editHeight.removeTextChangedListener(heightWatcher)
                         holder.editWidth.setText(item.width)
                         holder.editHeight.setText(item.height)
+                        holder.editWidth.addTextChangedListener(widthWatcher)
+                        holder.editHeight.addTextChangedListener(heightWatcher)
+
                         item.notifyChanged()
                     }
 

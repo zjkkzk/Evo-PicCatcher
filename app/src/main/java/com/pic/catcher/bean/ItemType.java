@@ -14,5 +14,6 @@ public interface ItemType {
     int TYPE_GROUP = 5;
     int TYPE_QUICK_PRESET = 6;
     int TYPE_RESOLUTION = 7;
+    int TYPE_NOMEDIA = 8;
 }
 

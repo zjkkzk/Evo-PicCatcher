@@ -6,6 +6,7 @@ package com.pic.catcher.bean
 class ResolutionItem(val title: String, var width: String, var height: String) : ItemType {
     
     var isPreviewing: Boolean = false
+    var focusedFieldId: Int = 0 // 记录最后获取焦点的 EditText ID
     private val listeners = mutableListOf<(String, String) -> Unit>()
 
     fun onResolutionChanged(listener: (String, String) -> Unit) {

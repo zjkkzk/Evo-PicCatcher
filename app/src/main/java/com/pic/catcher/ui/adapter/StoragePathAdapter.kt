@@ -1,5 +1,6 @@
 package com.pic.catcher.ui.adapter
 
+import android.graphics.drawable.Drawable
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
@@ -9,10 +10,13 @@ import com.pic.catcher.databinding.ItemStoragePathBinding
 import java.io.File
 
 data class StoragePathItem(
+    val appName: String,
     val packageName: String,
     val path: String,
     val sizeStr: String,
-    val file: File
+    val fileCountStr: String,
+    val file: File,
+    val icon: Drawable? = null
 )
 
 class StoragePathAdapter(
@@ -32,9 +36,17 @@ class StoragePathAdapter(
 
     inner class ViewHolder(private val binding: ItemStoragePathBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(item: StoragePathItem) {
+            binding.tvAppName.text = item.appName
             binding.tvPackageName.text = item.packageName
-            binding.tvPath.text = item.path
             binding.tvSize.text = item.sizeStr
+            binding.tvFileCount.text = item.fileCountStr
+            
+            if (item.icon != null) {
+                binding.ivIcon.setImageDrawable(item.icon)
+            } else {
+                binding.ivIcon.setImageResource(com.pic.catcher.R.drawable.ic_storage)
+            }
+
             binding.btnOpen.setOnClickListener { onOpenClick(item) }
             binding.btnClear.setOnClickListener { onClearClick(item) }
         }

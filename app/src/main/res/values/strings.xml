@@ -17,7 +17,7 @@
     <string name="app_code_branch">代码分支：%s</string>
     <string name="app_commit_hash_format">提交哈希：%s</string>
     <string name="app_build_time_format">构建时间：%s</string>
-    <string name="app_config">应用配置</string>
+    <string name="app_config">设置</string>
     <string name="click_here_to_edit_config">点击此处编辑配置</string>
     <string name="app_title_config">配置</string>
     <string name="config_catch_net_pic">抓取网络图片</string>
@@ -99,7 +99,7 @@
     <string name="spinner_des_png_format">png格式，图片质量高，支持透明像素</string>
     <string name="toast_plugin_config_change_tip">配置已变更，目标应用需重启</string>
     <string name="toast_settings_updated">设置已更新!</string>
-    <string name="nav_settings">设置</string>
+    <string name="nav_settings">Settings</string>
     <string name="nav_home">主页</string>
     <string name="nav_storage">储存</string>
     <string name="storage_title">Storage</string>
@@ -107,9 +107,9 @@
     <string name="storage_item_clear">清空</string>
     <string name="storage_item_open">查看</string>
     <string name="storage_clear_confirm_title">确认清空</string>
-    <string name="storage_clear_confirm_msg">确定要清空该目录下的所有图片吗？此操作不可撤销。</string>
+    <string name="storage_clear_confirm_msg">确定要清空 %1$s 的所有图片吗？此操作不可撤销。</string>
     <string name="storage_empty_hint">暂无图片路径，去开启抓取吧</string>
-    <string name="storage_path_cleared">路径已清空</string>
+    <string name="storage_path_cleared">清空</string>
     <string name="nav_presets">预设</string>
     <string name="presets_title">Presets</string>
     <string name="presets_subtitle">根据应用一键开启推荐开关</string>

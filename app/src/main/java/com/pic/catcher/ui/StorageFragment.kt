@@ -7,6 +7,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.app.AlertDialog
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.lu.magic.util.ToastUtil
@@ -23,6 +24,7 @@ class StorageFragment : Fragment() {
     private var _binding: LayoutStorageBinding? = null
     private val binding get() = _binding!!
     private lateinit var adapter: StoragePathAdapter
+    private var allPaths = mutableListOf<StoragePathItem>()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -35,8 +37,19 @@ class StorageFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        setupTabLayout()
         setupRecyclerView()
         loadPaths()
+    }
+
+    private fun setupTabLayout() {
+        binding.tabLayout.addOnTabSelectedListener(object : com.google.android.material.tabs.TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: com.google.android.material.tabs.TabLayout.Tab?) {
+                filterPaths(tab?.position ?: 0)
+            }
+            override fun onTabUnselected(tab: com.google.android.material.tabs.TabLayout.Tab?) {}
+            override fun onTabReselected(tab: com.google.android.material.tabs.TabLayout.Tab?) {}
+        })
     }
 
     private fun setupRecyclerView() {
@@ -51,77 +64,107 @@ class StorageFragment : Fragment() {
     private fun loadPaths() {
         AppExecutor.io().execute {
             val paths = mutableListOf<StoragePathItem>()
+            val pm = requireContext().packageManager
             
             // 扫描两个可能的根目录
             val internalRoot = requireContext().getExternalFilesDir("Pictures")?.absolutePath
             val externalRoot = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES).absolutePath + "/PicCatcher"
             
-            val rootPaths = listOf(internalRoot, externalRoot)
+            val roots = mapOf(
+                "Internal" to internalRoot,
+                "External" to externalRoot
+            )
 
-            rootPaths.filterNotNull().forEach { rootPath ->
-                val rootFile = File(rootPath)
-                if (rootFile.exists() && rootFile.isDirectory) {
-                    rootFile.listFiles()?.forEach { file ->
-                        if (file.isDirectory && !file.name.startsWith(".")) {
-                            val size = FileUtils.getFolderSize(file)
-                            if (size >= 0) { // 即使是 0 也显示，方便查看 and 管理（例如刚清空的）
-                                val nomedia = File(file, ".nomedia")
-                                val isHidden = nomedia.exists()
-                                paths.add(
-                                    StoragePathItem(
-                                        packageName = file.name + (if (isHidden) " (.nomedia)" else ""),
-                                        path = file.absolutePath,
-                                        sizeStr = FileUtils.formatFileSize(size),
-                                        file = file
+            roots.forEach { (_, rootPath) ->
+                if (rootPath != null) {
+                    val rootFile = File(rootPath)
+                    if (rootFile.exists() && rootFile.isDirectory) {
+                        rootFile.listFiles()?.forEach { file ->
+                            if (file.isDirectory && !file.name.startsWith(".")) {
+                                val size = FileUtils.getFolderSize(file)
+                                if (size >= 0) {
+                                    val pkgName = file.name
+                                    var appLabel = pkgName
+                                    var appIcon: android.graphics.drawable.Drawable? = null
+                                    
+                                    try {
+                                        val appInfo = pm.getApplicationInfo(pkgName, 0)
+                                        appLabel = pm.getApplicationLabel(appInfo).toString()
+                                        appIcon = pm.getApplicationIcon(appInfo)
+                                    } catch (e: Exception) {
+                                        // 应用可能已卸载
+                                    }
+
+                                    val fileCount = FileUtils.getFileCount(file)
+
+                                    paths.add(
+                                        StoragePathItem(
+                                            appName = appLabel,
+                                            packageName = pkgName,
+                                            path = file.absolutePath,
+                                            sizeStr = FileUtils.formatFileSize(size),
+                                            fileCountStr = "$fileCount files",
+                                            file = file,
+                                            icon = appIcon
+                                        )
                                     )
-                                )
+                                }
                             }
                         }
                     }
                 }
             }
 
-            // 按包名排序
-            paths.sortBy { it.packageName }
+            // 按应用名称排序
+            paths.sortBy { it.appName }
+            allPaths = paths
 
             activity?.runOnUiThread {
                 if (!isAdded) return@runOnUiThread
-                adapter.submitList(paths)
-                if (paths.isEmpty()) {
-                    ToastUtil.show(R.string.storage_empty_hint)
-                }
+                filterPaths(binding.tabLayout.selectedTabPosition)
             }
+        }
+    }
+
+    private fun filterPaths(position: Int) {
+        val internalRoot = requireContext().getExternalFilesDir("Pictures")?.absolutePath ?: ""
+        val filtered = if (position == 0) {
+            // 内部路径：在 Android/data/com.evo.piccatcher 下的
+            allPaths.filter { it.path.contains(internalRoot) }
+        } else {
+            // 外部路径：在 Pictures/PicCatcher 下的
+            val externalRoot = "/Pictures/PicCatcher"
+            allPaths.filter { !it.path.contains(internalRoot) && it.path.contains(externalRoot) }
+        }
+        
+        adapter.submitList(filtered)
+        if (filtered.isEmpty()) {
+            ToastUtil.show(if (position == 0) "内部暂无图片" else "外部暂无图片")
         }
     }
 
     private fun openPath(item: StoragePathItem) {
         try {
-            val uri = androidx.core.content.FileProvider.getUriForFile(
-                requireContext(),
-                "${requireContext().packageName}.fileprovider",
-                item.file
-            )
-
-            // 优先尝试使用系统文件管理器打开 (Android 7.0+)
             val intent = Intent(Intent.ACTION_VIEW).apply {
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    requireContext(),
+                    "${requireContext().packageName}.fileprovider",
+                    item.file
+                )
                 setDataAndType(uri, "resource/folder")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                
+                // 尝试直接调用 com.android.documentsui (系统文件应用)
+                setPackage("com.android.documentsui")
             }
 
-            // 适配 Android 10+ 的 Scoped Storage 限制，
-            // 实际上对于第三方应用，很难直接通过 Intent 让其他应用打开一个具体文件夹并显示内容。
-            // 这里的最佳实践是调用系统的文件选择器（ACTION_GET_CONTENT 或 ACTION_OPEN_DOCUMENT）
-            // 或者使用 ACTION_VIEW 配合特定的 MIME type
-            
             try {
                 startActivity(intent)
             } catch (e: Exception) {
-                // 如果没有专门处理文件夹的应用，尝试以通用方式打开
-                val chooser = Intent.createChooser(Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "*/*")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }, "Open Folder")
-                startActivity(chooser)
+                // 如果指定 package 失败，则不限制 package 再次尝试
+                intent.setPackage(null)
+                intent.setDataAndType(intent.data, "*/*")
+                startActivity(Intent.createChooser(intent, "Open Folder"))
             }
 
         } catch (e: Exception) {
@@ -130,10 +173,11 @@ class StorageFragment : Fragment() {
     }
 
     private fun showClearConfirm(item: StoragePathItem) {
-        AlertDialog.Builder(requireContext())
+        MaterialAlertDialogBuilder(requireContext())
+            .setIcon(R.drawable.ic_delete_sweep)
             .setTitle(R.string.storage_clear_confirm_title)
-            .setMessage(R.string.storage_clear_confirm_msg)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
+            .setMessage(getString(R.string.storage_clear_confirm_msg, item.appName))
+            .setPositiveButton(R.string.storage_path_cleared) { _, _ ->
                 clearPath(item)
             }
             .setNegativeButton(android.R.string.cancel, null)

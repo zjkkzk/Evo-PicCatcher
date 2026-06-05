@@ -55,9 +55,9 @@ public class FileUtils {
             if (fileList == null) return 0;
             for (File f : fileList) {
                 if (f.isDirectory()) {
-                    size = size + getFolderSize(f);
+                    size += getFolderSize(f);
                 } else {
-                    size = size + f.length();
+                    size += f.length();
                 }
             }
         } catch (Exception e) {
@@ -67,13 +67,35 @@ public class FileUtils {
     }
 
     /**
-     * 格式化单位
+     * 计算目录中的文件总数
+     */
+    public static int getFileCount(File file) {
+        int count = 0;
+        try {
+            File[] fileList = file.listFiles();
+            if (fileList == null) return 0;
+            for (File f : fileList) {
+                if (f.isDirectory()) {
+                    count += getFileCount(f);
+                } else {
+                    count++;
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return count;
+    }
+
+    /**
+     * 格式化单位 (1024进制，使用 MiB/KiB 标准)
      */
     public static String formatFileSize(long size) {
-        if (size <= 0) return "0 B";
-        final String[] units = new String[]{"B", "KB", "MB", "GB", "TB"};
-        int digitGroups = (int) (Math.log10(size) / Math.log10(1024));
-        return new java.text.DecimalFormat("#,##0.#").format(size / Math.pow(1024, digitGroups)) + " " + units[digitGroups];
+        if (size < 0) return "0 B";
+        if (size < 1024) return size + " B";
+        int exp = (int) (Math.log(size) / Math.log(1024));
+        String[] units = {"KiB", "MiB", "GiB", "TiB", "PiB", "EiB"};
+        return String.format(java.util.Locale.US, "%.1f %s", size / Math.pow(1024, exp), units[exp - 1]);
     }
 
     /**

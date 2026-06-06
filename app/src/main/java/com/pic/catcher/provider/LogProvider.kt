@@ -27,6 +27,19 @@ class LogProvider : ContentProvider() {
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
         when (method) {
+            "init_path" -> {
+                val pkg = extras?.getString("pkg") ?: arg
+                if (pkg != null) {
+                    val baseDir = context?.getExternalFilesDir("Pictures")
+                    if (baseDir != null) {
+                        val targetDir = File(baseDir, pkg)
+                        if (!targetDir.exists()) {
+                            targetDir.mkdirs()
+                        }
+                    }
+                }
+                return Bundle().apply { putBoolean("result", true) }
+            }
             "move_pic" -> {
                 val cachePath = extras?.getString("cache_path")
                 val pkg = extras?.getString("pkg")

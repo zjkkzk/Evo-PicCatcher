@@ -223,6 +223,15 @@ public class MainHook implements IXposedHookLoadPackage, IXposedHookZygoteInit, 
     }
 
     private void initTargetPlugins(Context context, XC_LoadPackage.LoadPackageParam lpparam) {
+        // 在目标应用启动时，通过 LogProvider 异步初始化对应的保存路径
+        try {
+            android.net.Uri uri = android.net.Uri.parse("content://com.pic.catcher.logprovider");
+            context.getContentResolver().call(uri, "init_path", lpparam.packageName, null);
+            LogUtil.d("Requested path initialization for: " + lpparam.packageName);
+        } catch (Throwable e) {
+            LogUtil.w("Failed to init path for " + lpparam.packageName, e);
+        }
+
         //目前生成的plugin都是单例的
                 PluginRegistry.register(
                         BitmapCatcherPlugin.class,

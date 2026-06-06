@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AccelerateDecelerateInterpolator
 import androidx.appcompat.app.AlertDialog
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import androidx.fragment.app.Fragment
@@ -37,9 +38,23 @@ class StorageFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        setupToolbar()
         setupTabLayout()
         setupRecyclerView()
         loadPaths()
+    }
+
+    private fun setupToolbar() {
+        binding.toolbar.inflateMenu(R.menu.menu_settings)
+        binding.toolbar.setOnMenuItemClickListener { item ->
+            if (item.itemId == R.id.action_refresh) {
+                startRefreshAnimation()
+                loadPaths()
+                true
+            } else {
+                false
+            }
+        }
     }
 
     private fun setupTabLayout() {
@@ -138,9 +153,6 @@ class StorageFragment : Fragment() {
         }
         
         adapter.submitList(filtered)
-        if (filtered.isEmpty()) {
-            ToastUtil.show(if (position == 0) "内部暂无图片" else "外部暂无图片")
-        }
     }
 
     private fun openPath(item: StoragePathItem) {
@@ -153,7 +165,7 @@ class StorageFragment : Fragment() {
                 )
                 setDataAndType(uri, "resource/folder")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                
+
                 // 尝试直接调用 com.android.documentsui (系统文件应用)
                 setPackage("com.android.documentsui")
             }
@@ -186,17 +198,21 @@ class StorageFragment : Fragment() {
 
     private fun clearPath(item: StoragePathItem) {
         AppExecutor.io().execute {
-            val success = FileUtils.deleteFolder(item.file)
+            FileUtils.deleteFolder(item.file)
             activity?.runOnUiThread {
                 if (!isAdded) return@runOnUiThread
-                if (success) {
-                    ToastUtil.show(R.string.storage_path_cleared)
-                    loadPaths() // 重新加载
-                } else {
-                    ToastUtil.show("清空失败")
-                }
+                loadPaths() // 重新加载
             }
         }
+    }
+
+    private fun startRefreshAnimation() {
+        val view = binding.toolbar.findViewById<View>(R.id.action_refresh) ?: return
+        view.animate()
+            .rotationBy(360f)
+            .setDuration(800)
+            .setInterpolator(AccelerateDecelerateInterpolator())
+            .start()
     }
 
     override fun onDestroyView() {

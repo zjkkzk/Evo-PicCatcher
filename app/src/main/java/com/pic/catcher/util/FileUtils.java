@@ -103,6 +103,13 @@ public class FileUtils {
      */
     public static boolean deleteFolder(File folder) {
         if (folder == null || !folder.exists()) return false;
+        
+        // 优先使用 Shell 方式，更彻底且处理权限更好
+        if (deleteFolderByShell(folder.getAbsolutePath())) {
+            return true;
+        }
+
+        // Fallback 到 Java 递归删除
         File[] files = folder.listFiles();
         if (files != null) {
             for (File f : files) {
@@ -113,6 +120,34 @@ public class FileUtils {
                 }
             }
         }
-        return true;
+        return folder.delete();
+    }
+
+    /**
+     * 通过 Shell 执行 rm -rf 删除，支持 Root 提升
+     */
+    public static boolean deleteFolderByShell(String path) {
+        if (path == null || path.trim().length() < 5) return false; // 路径太短拒绝执行，防止 rm -rf / 等
+        
+        // 严禁删除根目录、系统目录等
+        String lowerPath = path.toLowerCase();
+        if (lowerPath.equals("/") || lowerPath.startsWith("/system") || lowerPath.startsWith("/vendor") || lowerPath.equals("/sdcard") || lowerPath.equals("/storage/emulated/0")) {
+            LogUtil.d("Refuse to delete sensitive path: " + path);
+            return false;
+        }
+
+        try {
+            if (RootUtil.hasRootPermission()) {
+                RootUtil.RootResult result = RootUtil.runCommand("rm -rf \"" + path + "\"");
+                return result.isSuccess();
+            } else {
+                // 尝试普通 shell
+                Process process = Runtime.getRuntime().exec(new String[]{"rm", "-rf", path});
+                return process.waitFor() == 0;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 }

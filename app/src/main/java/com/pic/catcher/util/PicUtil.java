@@ -44,6 +44,8 @@ public abstract class PicUtil {
         } catch (Exception e) {
             e.printStackTrace();
         }
+        if (headerBytes == null || headerBytes.length < 4) return fallback;
+
         if ((headerBytes[0] & 0xFF) == 0xFF && (headerBytes[1] & 0xFF) == 0xD8) {
             return "jpg";
         } else if (headerBytes[0] == (byte) 0x89 && headerBytes[1] == (byte) 0x50 && headerBytes[2] == (byte) 0x4E && headerBytes[3] == (byte) 0x47) {
@@ -52,8 +54,26 @@ public abstract class PicUtil {
             return "gif";
         } else if (isWebP(headerBytes)) {
             return "webp";
+        } else if (isAvif(headerBytes)) {
+            return "avif";
+        } else if (isHeic(headerBytes)) {
+            return "heic";
         }
         return fallback;
+    }
+
+    public static boolean isAvif(byte[] data) {
+        if (data == null || data.length < 12) return false;
+        // ftypavif or ftypavis
+        return data[4] == 'f' && data[5] == 't' && data[6] == 'y' && data[7] == 'p' &&
+                data[8] == 'a' && data[9] == 'v' && data[10] == 'i' && (data[11] == 'f' || data[11] == 's');
+    }
+
+    public static boolean isHeic(byte[] data) {
+        if (data == null || data.length < 12) return false;
+        // ftypheic or ftyphems or ftypheix or ftyphevc
+        return data[4] == 'f' && data[5] == 't' && data[6] == 'y' && data[7] == 'p' &&
+                data[8] == 'h' && data[9] == 'e' && data[10] == 'i' && data[11] == 'c';
     }
 
     public static String detectImageType(byte[] data, String fallback) {

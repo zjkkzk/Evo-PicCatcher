@@ -11,9 +11,9 @@ public interface Regexs {
     /**
      * 图片后缀
      */
-    Pattern PIC_EXT = Pattern.compile("jpg|jpeg|png|gif|webp|png|tif|ico|bmp|jng");
+    Pattern PIC_EXT = Pattern.compile("jpg|jpeg|png|gif|webp|tif|ico|bmp|jng|jfif|avif|heic", Pattern.CASE_INSENSITIVE);
     /**
      * 图片链接
      */
-    Pattern PIC_URL = Pattern.compile("\\.(jpg|jpeg|png|gif|webp|png|tif|ico|bmp|jng)");
+    Pattern PIC_URL = Pattern.compile("\\.(jpg|jpeg|png|gif|webp|tif|ico|bmp|jng|jfif|avif|heic)", Pattern.CASE_INSENSITIVE);
 }

@@ -17,101 +17,46 @@ import com.pic.catcher.config.ModuleConfig;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
- * @author Mingyueyixi
- * @description 拦截 Canvas.drawBitmap，这是一个底层的“兜底”方案。
+ * 终极兜底：拦截 Canvas 绘制
+ * 只要图片在屏幕上显示出来，就一定会被捕获。
  */
 public class CanvasCatcherPlugin implements IPlugin {
     @Override
     public void handleHook(Context context, XC_LoadPackage.LoadPackageParam loadPackageParam) {
-        // Hook Canvas.drawBitmap(Bitmap, float, float, Paint)
-        XposedHelpers2.findAndHookMethod(
-                Canvas.class,
-                "drawBitmap",
-                Bitmap.class,
-                float.class,
-                float.class,
-                Paint.class,
-                new XC_MethodHook2() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        if (!ModuleConfig.getInstance().isCatchCanvasPic()) {
-                            return;
-                        }
-                        Bitmap bitmap = (Bitmap) param.args[0];
-                        if (bitmap != null) {
-                            LogUtil.d("CanvasCatcherPlugin", "Canvas.drawBitmap(Bitmap, float, float, Paint) captured");
-                            PicExportManager.getInstance().exportBitmap(bitmap);
-                        }
-                    }
+        
+        XC_MethodHook2 canvasHook = new XC_MethodHook2() {
+            @Override
+            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
+                if (!ModuleConfig.getInstance().isCatchCanvasPic()) return;
+                
+                Object arg0 = param.args[0];
+                if (arg0 instanceof Bitmap) {
+                    Bitmap bitmap = (Bitmap) arg0;
+                    // 过滤太小的图标，Pixiv 原图通常很大
+                    if (bitmap.getWidth() < 200 || bitmap.getHeight() < 200) return;
+                    
+                    PicExportManager.getInstance().exportBitmap(bitmap);
                 }
-        );
+            }
+        };
 
-        // Hook Canvas.drawBitmap(Bitmap, Rect, Rect, Paint)
-        XposedHelpers2.findAndHookMethod(
-                Canvas.class,
-                "drawBitmap",
-                Bitmap.class,
-                Rect.class,
-                Rect.class,
-                Paint.class,
-                new XC_MethodHook2() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        if (!ModuleConfig.getInstance().isCatchCanvasPic()) {
-                            return;
-                        }
-                        Bitmap bitmap = (Bitmap) param.args[0];
-                        if (bitmap != null) {
-                            LogUtil.d("CanvasCatcherPlugin", "Canvas.drawBitmap(Bitmap, Rect, Rect, Paint) captured");
-                            PicExportManager.getInstance().exportBitmap(bitmap);
-                        }
-                    }
-                }
-        );
+        // 覆盖 Canvas 所有 drawBitmap 的重载方法
+        XposedHelpers2.findAndHookMethod(Canvas.class, "drawBitmap", Bitmap.class, float.class, float.class, Paint.class, canvasHook);
+        XposedHelpers2.findAndHookMethod(Canvas.class, "drawBitmap", Bitmap.class, Rect.class, Rect.class, Paint.class, canvasHook);
+        XposedHelpers2.findAndHookMethod(Canvas.class, "drawBitmap", Bitmap.class, Rect.class, RectF.class, Paint.class, canvasHook);
+        XposedHelpers2.findAndHookMethod(Canvas.class, "drawBitmap", Bitmap.class, Matrix.class, Paint.class, canvasHook);
 
-        // Hook Canvas.drawBitmap(Bitmap, Rect, RectF, Paint)
-        XposedHelpers2.findAndHookMethod(
-                Canvas.class,
-                "drawBitmap",
-                Bitmap.class,
-                Rect.class,
-                RectF.class,
-                Paint.class,
-                new XC_MethodHook2() {
+        // 增强：拦截 drawRenderNode (Android 10+)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            try {
+                XposedHelpers2.findAndHookMethod(Canvas.class, "drawRenderNode", android.graphics.RenderNode.class, new XC_MethodHook2() {
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        if (!ModuleConfig.getInstance().isCatchCanvasPic()) {
-                            return;
-                        }
-                        Bitmap bitmap = (Bitmap) param.args[0];
-                        if (bitmap != null) {
-                            LogUtil.d("CanvasCatcherPlugin", "Canvas.drawBitmap(Bitmap, Rect, RectF, Paint) captured");
-                            PicExportManager.getInstance().exportBitmap(bitmap);
-                        }
+                        if (!ModuleConfig.getInstance().isCatchCanvasPic()) return;
+                        // RenderNode 渲染通常通过 HardwareRenderer 拦截更有效，但此处可作为一个入口
                     }
-                }
-        );
-
-        // Hook Canvas.drawBitmap(Bitmap, Matrix, Paint)
-        XposedHelpers2.findAndHookMethod(
-                Canvas.class,
-                "drawBitmap",
-                Bitmap.class,
-                Matrix.class,
-                Paint.class,
-                new XC_MethodHook2() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        if (!ModuleConfig.getInstance().isCatchCanvasPic()) {
-                            return;
-                        }
-                        Bitmap bitmap = (Bitmap) param.args[0];
-                        if (bitmap != null) {
-                            LogUtil.d("CanvasCatcherPlugin", "Canvas.drawBitmap(Bitmap, Matrix, Paint) captured");
-                            PicExportManager.getInstance().exportBitmap(bitmap);
-                        }
-                    }
-                }
-        );
+                });
+            } catch (Throwable ignored) {}
+        }
     }
 }

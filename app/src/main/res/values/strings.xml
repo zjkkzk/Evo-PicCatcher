@@ -111,8 +111,8 @@
     <string name="storage_empty_hint">暂无图片路径，去开启抓取吧</string>
     <string name="storage_path_cleared">清空</string>
     <string name="nav_presets">预设</string>
-    <string name="presets_title">Presets</string>
-    <string name="presets_subtitle">根据应用一键开启推荐开关</string>
+    <string name="presets_title">Presets(Beta)</string>
+    <string name="presets_subtitle">根据应用一键开启推荐开关(当前版本能都开就开吧)</string>
     <string name="presets_search_hint">搜索应用 (如: 小红书, Pixiv)</string>
     <string name="presets_apply">应用此预设</string>
     <string name="presets_apps_format">适用应用: %s</string>

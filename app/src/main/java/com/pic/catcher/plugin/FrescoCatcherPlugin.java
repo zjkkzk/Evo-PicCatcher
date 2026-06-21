@@ -43,8 +43,6 @@ public class FrescoCatcherPlugin implements IPlugin {
                         // 使用 Xposed 直接调用 getInputStream
                         InputStream inputStream = XposedHelpers2.callMethod(encodedImage, "getInputStream");
                         if (inputStream != null) {
-                            // 注意：此处读取流可能会导致原 App 无法再次读取（如果流不支持 reset）
-                            // 但是 Fresco 的 getInputStream() 通常会返回一个新的流拷贝（如基于 PooledByteBuffer）
                             byte[] data = IOUtil.readToBytes(inputStream);
                             if (data != null && data.length > 0) {
                                 LogUtil.d("FrescoCatcherPlugin", "Captured from DefaultImageDecoder, size: " + data.length);
@@ -59,7 +57,37 @@ public class FrescoCatcherPlugin implements IPlugin {
             });
         }
 
-        // 2. 兜底方案：Hook CloseableStaticBitmap 的创建（这是 Fresco 解码后的 Bitmap 容器）
+        // 3. 增强：Hook AnimatedImageFactoryImpl (用于处理 GIF/WebP 动图)
+        Class<?> animatedImageFactoryClazz = ClazzN.from("com.facebook.imagepipeline.animated.factory.AnimatedImageFactoryImpl");
+        if (animatedImageFactoryClazz != null) {
+            // public CloseableImage decodeGif(final EncodedImage encodedImage, final ImageDecodeOptions options, final Bitmap.Config bitmapConfig)
+            // public CloseableImage decodeWebP(final EncodedImage encodedImage, final ImageDecodeOptions options, final Bitmap.Config bitmapConfig)
+            XC_MethodHook2 animatedHook = new XC_MethodHook2() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    if (!ModuleConfig.getInstance().isCatchFrescoPic()) return;
+                    Object encodedImage = param.args[0];
+                    if (encodedImage == null) return;
+                    try {
+                        InputStream inputStream = XposedHelpers2.callMethod(encodedImage, "getInputStream");
+                        if (inputStream != null) {
+                            byte[] data = IOUtil.readToBytes(inputStream);
+                            if (data != null && data.length > 0) {
+                                LogUtil.d("FrescoCatcherPlugin", "Captured Animated Image, size: " + data.length);
+                                PicExportManager.getInstance().exportByteArray(data, null);
+                            }
+                            IOUtil.closeQuietly(inputStream);
+                        }
+                    } catch (Throwable t) {
+                        LogUtil.w("FrescoCatcherPlugin animated decode error", t);
+                    }
+                }
+            };
+            XposedHelpers2.hookAllMethods(animatedImageFactoryClazz, "decodeGif", animatedHook);
+            XposedHelpers2.hookAllMethods(animatedImageFactoryClazz, "decodeWebP", animatedHook);
+        }
+
+        // 2. 兜底方案：Hook CloseableStaticBitmap 的创建 (这是 Fresco 解码后的 Bitmap 容器)
         Class<?> closeableStaticBitmapClazz = ClazzN.from("com.facebook.imagepipeline.image.CloseableStaticBitmap");
         if (closeableStaticBitmapClazz != null) {
             XposedHelpers2.findAndHookConstructor(closeableStaticBitmapClazz, 

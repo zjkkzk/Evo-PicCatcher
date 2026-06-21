@@ -65,8 +65,8 @@ android {
         applicationId "com.evo.piccatcher"
         minSdk 29
         targetSdk TARGET_SDK_VERSION.toInteger()
-        versionCode 69
-        versionName "4.10.48"
+        versionCode 71
+        versionName "4.10.55"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 

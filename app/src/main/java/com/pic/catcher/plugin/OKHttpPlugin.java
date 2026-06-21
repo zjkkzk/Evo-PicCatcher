@@ -91,14 +91,20 @@ public class OKHttpPlugin implements IPlugin {
                             if (TextUtils.isEmpty(contentType)) return;
 
                             String guessFileEx = MimeTypeMap.getSingleton().getExtensionFromMimeType(contentType);
-                            if (!PicUtil.isPicSuffix(guessFileEx)) return;
 
-                            // OkHttp3 使用 peekBody 是安全的，它不会消耗原始流
-                            Object response2 = XposedHelpers2.callMethod(response, "peekBody", 1024 * 1024 * 5L); // 限制 5MB
+                            // 增强：针对 Pixiv Ugoira (ZIP包) 的特殊处理
+                            String url = (String) XposedHelpers2.callMethod(XposedHelpers2.callMethod(response, "request"), "url").toString();
+                            boolean isPixivUgoira = url.contains("ugoira") && (contentType.contains("zip") || "zip".equals(guessFileEx));
+
+                            if (!PicUtil.isPicSuffix(guessFileEx) && !isPixivUgoira) return;
+
+                            // OkHttp3 使用 peekBody 是安全的
+                            Object response2 = XposedHelpers2.callMethod(response, "peekBody", 1024 * 1024 * 20L); // Pixiv ZIP 可能较大，放宽到 20MB
                             if (response2 != null) {
                                 Object bytes = XposedHelpers2.callMethod(response2, "bytes");
                                 if (bytes instanceof byte[]) {
-                                    PicExportManager.getInstance().exportByteArray((byte[]) bytes, guessFileEx);
+                                    String finalEx = isPixivUgoira ? ".ugoira.zip" : guessFileEx;
+                                    PicExportManager.getInstance().exportByteArray((byte[]) bytes, finalEx);
                                 }
                             }
                         } catch (Throwable t) {
